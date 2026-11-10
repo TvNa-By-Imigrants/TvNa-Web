@@ -1,0 +1,112 @@
+classDiagram
+  direction LR
+  class ClipFile {
+    <<clips/02.json>>
+    +str clip_id
+    +str audio_file
+    +Source source
+    +Stt stt
+    +str ground_truth
+    +Extraction extraction
+    +List~ClipPlace~ fields
+    +str notes
+  }
+  class Source {
+    <<stage 1 person>>
+    +str url
+    +str platform
+    +str creator
+    +date posted_at
+    +date collected_at
+  }
+  class Stt {
+    <<stage 3 script>>
+    +str tool
+    +str model
+    +str settings
+    +str transcript
+  }
+  class Extraction {
+    <<stage 4 script>>
+    +str method
+    +str model
+    +str prompt_version
+  }
+  class ClipPlace {
+    <<one place in fields>>
+    +str place_id
+    +str place_name
+    +List~str~ place_name_alt
+    +str category
+    +str sub_category
+    +str price_range
+    +List~str~ area
+    +str area_description
+    +str google_maps_url
+    +str opening_hours
+    +str speaker_opinion
+    +List~str~ menu_items
+    +float completeness
+    +List~str~ missing_fields
+    +str verification_status
+    +str cleaned_by
+    +str cleaner_note
+    +str notes
+    +Confidence confidence
+    +dict missing_reasons
+    +str evidence_text
+    +List~int~ segment_ids
+    +List~str~ flags
+  }
+  class Place {
+    <<places.json>>
+    +str place_id
+    +str place_name
+    +List~str~ aliases
+    +List~str~ area
+    +str google_maps_url
+  }
+  class Area {
+    <<areas.json>>
+    +str district
+    +str district_km
+  }
+  class FinalRecord {
+    <<final_dataset.json>>
+    +str place_id
+    +str place_name
+    +List~str~ place_name_alt
+    +List~str~ category
+    +List~str~ price_range
+    +List~str~ area
+    +List~str~ area_description
+    +str google_maps_url
+    +List~str~ opening_hours
+    +List~str~ menu_items
+    +int popularity
+    +List~Mention~ mentions
+  }
+  class Mention {
+    +str clip_id
+    +str creator
+    +str speaker_opinion
+  }
+  ClipFile "1" *-- "1" Source
+  ClipFile "1" *-- "1" Stt
+  ClipFile "1" *-- "0..1" Extraction
+  ClipFile "1" *-- "0..*" ClipPlace : fields
+  ClipPlace "0..*" --> "0..1" Place : place_id
+  ClipPlace "0..*" --> "0..*" Area : area
+  Place "0..*" --> "0..*" Area : area
+  FinalRecord "1" --> "1" Place : place_id
+  FinalRecord "1" *-- "1..*" Mention : mentions
+  Mention "0..*" --> "1" ClipFile : clip_id
+  style ClipFile fill:#E6F1FB,stroke:#185FA5
+  style Source fill:#E6F1FB,stroke:#185FA5
+  style Stt fill:#E6F1FB,stroke:#185FA5
+  style Extraction fill:#E6F1FB,stroke:#185FA5
+  style ClipPlace fill:#E6F1FB,stroke:#185FA5
+  style Place fill:#EAF3DE,stroke:#3B6D11
+  style Area fill:#EEEDFE,stroke:#534AB7
+  style FinalRecord fill:#FAECE7,stroke:#993C1D
+  style Mention fill:#FAECE7,stroke:#993C1D

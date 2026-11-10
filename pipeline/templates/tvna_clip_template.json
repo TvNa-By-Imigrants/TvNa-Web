@@ -1,0 +1,21 @@
+{
+  "clip_id": null,
+  "audio_file": null,
+  "source": {
+    "url": null,
+    "platform": null,
+    "creator": null,
+    "posted_at": null,
+    "collected_at": null
+  },
+  "stt": {
+    "tool": null,
+    "model": null,
+    "settings": null,
+    "transcript": null
+  },
+  "ground_truth": null,
+  "extraction": null,
+  "fields": null,
+  "notes": null
+}

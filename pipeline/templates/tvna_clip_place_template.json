@@ -1,0 +1,30 @@
+{
+  "place_id": null,
+  "place_name": null,
+  "place_name_alt": [],
+  "category": null,
+  "sub_category": null,
+  "price_range": null,
+  "area": null,
+  "area_description": null,
+  "google_maps_url": null,
+  "opening_hours": null,
+  "speaker_opinion": null,
+  "menu_items": null,
+  "completeness": null,
+  "missing_fields": [],
+  "verification_status": null,
+  "cleaned_by": null,
+  "cleaner_note": null,
+  "notes": null,
+  "confidence": {
+    "place_name": null,
+    "category": null,
+    "price_range": null,
+    "area": null
+  },
+  "missing_reasons": {},
+  "evidence_text": null,
+  "segment_ids": [],
+  "flags": []
+}
