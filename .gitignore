@@ -4,7 +4,5 @@ __pycache__/
 .DS_Store
 data/audio/*
 !data/audio/.gitkeep
-data/videos/*
-!data/videos/.gitkeep
 *.mp4
 *.wav

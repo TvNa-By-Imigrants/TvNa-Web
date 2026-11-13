@@ -18,11 +18,10 @@ from pathlib import Path
 from typing import List, Tuple
 from urllib.parse import urljoin, urlsplit
 
-from tvna_common import CLIPS_DIR, TEMPLATES_DIR, display_path, load_json, save_json, video_key
+from tvna_common import CLIP_ID, CLIPS_DIR, TEMPLATES_DIR, display_path, load_json, save_json, video_key
 
 TEMPLATE_FILE = TEMPLATES_DIR / "tvna_clip_template.json"
 TIKTOK_VIDEO_URL = re.compile(r"tiktok\.com/(@[^/?#]+)/video/(\d+)")
-CLIP_ID = re.compile(r"PP-(\d+)")
 USER_AGENT = "tvna-pipeline/0.1"
 MAX_REDIRECTS = 5
 

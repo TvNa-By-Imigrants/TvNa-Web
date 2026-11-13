@@ -334,27 +334,11 @@ How a clip place gets its `place_id` (`match_places.py`):
 
 ---
 
-## 10. How to run (in `text-json/`)
+## 10. How to run
 
-Setup, once:
+Setup and every command, in order, are in the [README](../README.md) under **Setup** and **How to run**. The README is kept up to date after every stage is built.
 
-```sh
-python3.12 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-cp .env.example .env   # then put your GEMINI_API_KEY in .env
-```
-
-Run in this order:
-
-```sh
-.venv/bin/python extract_places_gemini.py clips/02.json   # stage 4 (add --force to redo a clip)
-.venv/bin/python dedupe_clips.py clips/*.json             # stage 5a
-# stage 5b: team review in the clip files
-.venv/bin/python match_places.py clips/*.json             # stage 5c
-.venv/bin/python build_final_dataset.py clips/*.json      # stage 6 -> final_dataset.json
-```
-
-Empty templates: `tvna_clip_template.json`, `tvna_clip_place_template.json`, `tvna_places_template.json`, `tvna_areas_template.json`, `tvna_final_dataset_template.json`.
+Empty templates (in `templates/`): `tvna_clip_template.json`, `tvna_clip_place_template.json`, `tvna_places_template.json`, `tvna_areas_template.json`, `tvna_final_dataset_template.json`.
 
 ---
 

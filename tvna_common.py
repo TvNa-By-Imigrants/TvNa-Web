@@ -12,6 +12,7 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 AREAS_FILE = DATA_DIR / "areas.json"
 PLACES_FILE = DATA_DIR / "places.json"
 CLIPS_DIR = DATA_DIR / "clips"
+AUDIO_DIR = DATA_DIR / "audio"
 
 CATEGORIES = [
     "restaurant", "cafe", "bar", "street_food",
@@ -23,6 +24,7 @@ CATEGORIES = [
 COMPLETENESS_FIELDS = ["place_name", "area", "speaker_opinion"]
 
 TIKTOK_VIDEO_ID = re.compile(r"tiktok\.com/.*/video/(\d+)")
+CLIP_ID = re.compile(r"PP-(\d+)")
 
 
 def norm(s: Optional[str]) -> str:

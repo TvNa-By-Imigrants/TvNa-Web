@@ -19,28 +19,27 @@ Each video becomes one clip file (`data/clips/PP-001.json`). Every stage is a sm
 
 ## Where we are now
 
-_Last updated: 2026-11-10_
+_Last updated: 2026-11-12_
 
 | Stage | What it does | Script | Status |
 |---|---|---|---|
 | 1. Collect | Paste a TikTok link → new clip file | `stage1_new_clip.py` | ✅ Built and tested |
-| 2. Video → audio | Download the video → 16 kHz mono WAV | `stage2_get_audio.py` | 🔜 **Next, being built** |
-| 3. Audio → transcript | Gemini writes the Khmer + English transcript | `stage3_transcribe.py` | ⏳ Planned |
+| 2. Video → audio | Download the video → 16 kHz mono WAV | `stage2_get_audio.py` | ✅ Built and tested |
+| 3. Audio → transcript | Gemini writes the Khmer + English transcript | `stage3_transcribe.py` | 🔜 **Next, being built** |
 | 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built (Phnom Penh check planned) |
 | 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built |
 | 5b. Team review | People check and fill missing fields | by hand + `stage5b_validate_clips.py` | ⏳ Validator planned |
 | 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built (fuzzy name matching planned) |
 | 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built |
 
-Until stages 2 and 3 are built, a new clip stops after stage 1.
+Until stage 3 is built, a new clip stops after stage 2.
 
 **Coming next, in order:**
-1. Stage 2: download and audio
-2. Stage 3: transcript
-3. Automatic tests (`python -m unittest`)
-4. The clip validator
-5. Fuzzy name matching
-6. The Phnom Penh check in stage 4
+1. Stage 3: transcript
+2. Automatic tests (`python -m unittest`)
+3. The clip validator
+4. Fuzzy name matching
+5. The Phnom Penh check in stage 4
 
 ---
 
@@ -75,6 +74,39 @@ On Windows, create the venv with `py -3.12 -m venv .venv` and activate it with `
 
 ---
 
+## How to run
+
+Each command does one stage, prints what it did and the next command, then stops so you can check.
+
+**Right now a new video can go through stages 1 and 2.** Stage 3 is being built, and stages 4–6 need its transcript.
+
+**For each new video:**
+
+```sh
+source .venv/bin/activate                                 # in every new terminal
+git pull                                                  # get the team's latest clips first
+
+python stage1_new_clip.py "<TikTok link>"                 # 1. ✅ new clip file: data/clips/PP-NNN.json
+python stage2_get_audio.py data/clips/PP-NNN.json         # 2. ✅ audio: data/audio/PP-NNN.wav
+# 3. 🔜 transcript: stage3_transcribe.py (being built)
+python stage4_extract_places.py data/clips/PP-NNN.json    # 4. ✅ places, from the transcript (--force to redo)
+```
+
+Replace `PP-NNN` with the number stage 1 printed.
+
+**Then, for all clips together:**
+
+```sh
+python stage5a_dedupe_clips.py data/clips/*.json          # 5a. ✅ move clips of the same video to duplicates/
+# 5b. team review: check and fill the clip files by hand (field guide, section 6)
+python stage5c_match_places.py data/clips/*.json          # 5c. ✅ give each place a place_id, update places.json
+python stage6_build_final_dataset.py data/clips/*.json    # 6.  ✅ build data/final_dataset.json
+```
+
+Each stage has its own section below with what it does and a "Test it yourself" table.
+
+---
+
 ## Folder layout
 
 ```
@@ -89,8 +121,7 @@ TvNa-Web/
 │   ├── areas.json                 ← the 14 Phnom Penh districts (fixed list)
 │   ├── clips/                     ← one file per video: PP-001.json, PP-002.json …
 │   │   └── duplicates/            ← clips of a video we already have
-│   ├── audio/                     ← WAV files (not in git)
-│   ├── videos/                    ← videos saved by hand, as a backup (not in git)
+│   ├── audio/                     ← WAV files made by stage 2 (not in git)
 │   ├── places.json                ← made by stage 5c
 │   └── final_dataset.json         ← made by stage 6
 ├── templates/                     ← empty JSON templates for every file type
@@ -140,15 +171,45 @@ Next: python stage2_get_audio.py data/clips/PP-001.json
 
 ---
 
-## Stages 4–6 (built; they need transcripts from stages 2–3 first)
+## Stage 2: get the audio
 
 ```sh
-python stage4_extract_places.py data/clips/PP-001.json      # add --force to redo a clip
-python stage5a_dedupe_clips.py data/clips/*.json
-# stage 5b: team review, by editing the clip files (see the field guide, section 6)
-python stage5c_match_places.py data/clips/*.json
-python stage6_build_final_dataset.py data/clips/*.json      # -> data/final_dataset.json
+python stage2_get_audio.py data/clips/PP-001.json
 ```
+
+What it does:
+1. **Downloads the video** from the clip's TikTok link (with yt-dlp) into a temporary folder.
+2. **Makes the WAV:** `data/audio/PP-001.wav`, 16 kHz, mono, 16-bit (with ffmpeg). This is the format stage 3 needs.
+3. **Deletes the video.** Only the WAV is kept.
+4. **Updates the clip file:** sets `audio_file`. If `posted_at` is empty, it fills it with the date TikTok shows (Phnom Penh time).
+
+You'll see:
+
+```
+PP-001: downloading https://www.tiktok.com/@user/video/7593339174695046416 ...
+PP-001: saved data/audio/PP-001.wav (16 kHz, mono, 52.4 s)
+  posted_at: 2026-01-09 (from TikTok)
+Next: python stage3_transcribe.py data/clips/PP-001.json
+```
+
+You can give it several clips at once (`data/clips/PP-002.json data/clips/PP-003.json`). If one fails, the others keep going, and a summary is printed at the end.
+
+WAV files are **not in git**. After `git pull`, a teammate's clip has `audio_file` set but no WAV on your computer: just run stage 2 on it, and it downloads the video again.
+
+**Test it yourself:**
+
+| Try this | You should see |
+|---|---|
+| The clip you made in stage 1 | `saved data/audio/PP-00N.wav (16 kHz, mono, … s)`. Play the WAV: it's the video's sound. The clip file now has `audio_file` (and `posted_at`, if it was empty) |
+| The same command again | `already has audio … Skipped.` |
+| The same command with `--force` | It downloads the video and makes the WAV again |
+| A clip whose video was deleted or made private | `Download failed: …` then `Nothing changed in …`. The clip file isn't touched |
+
+---
+
+## Stages 4–6
+
+Built. They need the transcript from stage 3 first. The commands are in [How to run](#how-to-run).
 
 ---
 
