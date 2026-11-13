@@ -70,6 +70,21 @@ cd TvNa-Web
 source .venv/bin/activate
 ```
 
+**Why:** our packages (yt-dlp, Gemini and the rest) are installed only in `.venv/`, the project's own Python 3.12, at the exact versions in `requirements.lock.txt`. `source .venv/bin/activate` makes `python` mean that Python, so everyone on the team runs the same Python with the same packages. It lasts until you close that terminal.
+
+Check it worked: `which python` should end in `.venv/bin/python`.
+
+If you forget it:
+
+| You see | Why |
+|---|---|
+| `zsh: command not found: python` | Plain `python` only exists when the venv is on. |
+| `ModuleNotFoundError: No module named 'yt_dlp'` (or `google`, `dotenv`) | You ran the Mac's own `python3`, which has none of our packages. |
+
+Fix for both: run `source .venv/bin/activate` in the repo folder, then run your command again.
+
+In VS Code you can make new terminals do this for you: press Cmd+Shift+P, choose **Python: Select Interpreter**, and pick the one in `./.venv`.
+
 On Windows, create the venv with `py -3.12 -m venv .venv` and activate it with `.venv\Scripts\activate`.
 
 ---
