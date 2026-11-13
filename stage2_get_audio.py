@@ -48,9 +48,10 @@ class _QuietLogger:
 
 
 def download(url: str, folder: Path) -> Tuple[Path, dict]:
-    """Download the video into folder (only the sound, when TikTok offers it on its own)."""
+    """Download the video into folder, with the sound viewers hear (voice-over and music mixed)."""
     options = {
-        "format": "bestaudio/best",
+        # Not "bestaudio": TikTok's separate audio file is the song the video uses, without the voice-over.
+        "format": "best",
         "outtmpl": str(folder / "video.%(ext)s"),
         "noplaylist": True,
         "socket_timeout": 30,

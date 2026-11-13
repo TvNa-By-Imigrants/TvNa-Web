@@ -1,0 +1,21 @@
+{
+  "clip_id": "PP-003",
+  "audio_file": "PP-003.wav",
+  "source": {
+    "url": "https://www.tiktok.com/@smilephotos7/video/7651894070515731733",
+    "platform": "tiktok",
+    "creator": "@smilephotos7",
+    "posted_at": "2026-06-16",
+    "collected_at": "2026-11-13"
+  },
+  "stt": {
+    "tool": "gemini",
+    "model": "gemini-3.6-flash",
+    "settings": "km+en code-switching prompt v1",
+    "transcript": "Hello guys, welcome to ALWAYS selfie booth.\nចាស ឥឡូវនេះនៅក្នុងហាងយើងបាន update ច្រើនមែនទែនទាំងអស់គ្នា យើងមាន salon ឲ្យទាំងអស់គ្នាអង្គុយរង់ចាំ។\nចំណែកខាងនេះ ទាំងអស់គ្នាអាចរើស frame ហើយនិងពណ៌ background ដែលទាំងអស់គ្នាពេញចិត្ត មុននឹងចូលទៅថតនៅខាងក្នុង។\nនៅទីនេះ យើងក៏មានផ្លិត កញ្ចក់ធំ ហើយមានភ្លើងស្អាតសម្រាប់ឆ្លុះ ហើយក៏មានម៉ាស៊ីនកៀបសក់ ជាមួយនិង makeup ដែលទាំងអស់គ្នាអាចរៀបចំខ្លួនបាន មុននឹងចូលថត។\nបន្ទាប់ពីរៀបចំខ្លួនហើយ គឺអ្នកទាំងអស់គ្នាអាចរើស head accessories ដែលនៅជិតហ្នឹងបាន គឺយើងមានច្រើនមែនទែនទាំងអស់គ្នា ហើយទាំងអស់គ្នាអាចរើសបានមួយសេរី។\nងាកមកមួយខាងទៀត នេះគឺជាបន្ទប់ថតរូបរបស់យើង។\nចាស នៅក្នុងបន្ទប់ថតរូបរបស់យើង គឺមានទីធ្លាធំទូលាយមែនទែន ក្នុងនេះក៏យើងមាន decor ខ្លះៗដែរ។\nឥឡូវនេះ យើងក៏កំពុងត្រៀមរៀបចំបន្ទប់ថតរូបមួយទៀតដែរទាំងអស់គ្នា ដែលនៅជាប់នឹងបន្ទប់ទី១ទេ so waiting for our new studio room, guys.\nតោះ ចឹងបើអ្នកទាំងអស់គ្នាចង់មកថតរូបស្អាតៗ កុំភ្លេចមក ALWAYS selfie booth.\nThank you, bye."
+  },
+  "ground_truth": null,
+  "extraction": null,
+  "fields": null,
+  "notes": null
+}

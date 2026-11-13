@@ -34,10 +34,11 @@ _Last updated: 2026-11-13_
 
 **Coming next, in order:**
 1. Stage 4: switch to `gemini-3.6-flash` (Google deprecated `gemini-3.5-flash`)
-2. Automatic tests (`python -m unittest`)
-3. The clip validator
-4. Fuzzy name matching
-5. The Phnom Penh check in stage 4
+2. Save the TikTok caption, for videos where the place name is only in text, not speech (to plan)
+3. Automatic tests (`python -m unittest`)
+4. The clip validator
+5. Fuzzy name matching
+6. The Phnom Penh check in stage 4
 
 ---
 
@@ -225,6 +226,8 @@ Next: python stage4_extract_places.py data/clips/PP-002.json
 ```
 
 If it ends with `Gemini is busy … Run the same command again later`, do that. Clips that already have a transcript are skipped.
+
+A video with only music (nobody speaks) gets the transcript `[no speech]`. Song lyrics are not written down.
 
 **Test it yourself:**
 

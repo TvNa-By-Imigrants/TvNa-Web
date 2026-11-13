@@ -25,6 +25,7 @@ TRIES_PER_MODEL = 3
 WAITS = [10, 30]  # seconds before try 2 and try 3
 TRY_TIME_LIMIT_MS = 3 * 60 * 1000
 BUSY_CODES = {429, 500, 503, 504}
+NO_SPEECH = "[no speech]"
 SETTINGS = "km+en code-switching prompt v1"
 # Google allows 20 MB per request; bigger audio is uploaded with the Files API instead.
 INLINE_LIMIT = 15 * 1024 * 1024
@@ -38,7 +39,9 @@ Rules:
 - Do not translate.
 - Do not add words that are not spoken.
 - If a part is unclear, write [unclear].
-- Put each sentence on its own line."""
+- Put each sentence on its own line.
+- Do not write song lyrics or background music.
+- If nobody speaks, reply only: [no speech]"""
 
 
 def find_wav(clip: dict, audio_dir: Path, clip_path: Path) -> Path:
@@ -115,6 +118,8 @@ def transcribe(client, wav: Path, models: list) -> tuple:
     text = text.strip()
     if not text:
         raise ClipError("Gemini returned no transcript. Try again later, or listen to the WAV: does it have speech?")
+    if text.lower().rstrip(".") == NO_SPEECH:
+        return NO_SPEECH, model
     return unicodedata.normalize("NFC", text), model
 
 
@@ -137,6 +142,9 @@ def transcribe_clip(client, clip_path: Path, audio_dir: Path, models: list, forc
     clip["stt"] = {"tool": "gemini", "model": model, "settings": SETTINGS, "transcript": text}
     save_json(clip_path, clip)
 
+    if text == NO_SPEECH:
+        print(f"{clip_id}: no speech (music only). Saved the transcript as {NO_SPEECH}.")
+        return "made"
     lines = text.splitlines()
     print(f"{clip_id}: saved transcript ({len(lines)} lines, {model})")
     for line in lines[:PREVIEW_LINES]:

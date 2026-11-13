@@ -9,10 +9,10 @@
     "collected_at": "2026-11-13"
   },
   "stt": {
-    "tool": null,
-    "model": null,
-    "settings": null,
-    "transcript": null
+    "tool": "gemini",
+    "model": "gemini-3.6-flash",
+    "settings": "km+en code-switching prompt v1",
+    "transcript": "ហែម ភូក ក៏ ឆ្ងាញ់\nបាទ ថ្ងៃ នេះ ទៅ ទៅ ៗ\nសម្រាប់ អ្នក ដែល ចូលចិត្ត ញ៉ាំ អី នៅ កន្លែង ដែល ជន ជាតិ ដើម គេ បើក ហ្មង ណា\nWe have found another place for you guys.\nBut this time it is a Korean cuisine called Hanjang Coffee & Eatery.\nSo now, tasting time.\nToday we got fish cake soup. Hmm\nSo light with a savory broth.\nDeliciously bouncy fish cake.\nYou can try dipping it into the Tteokbokki sauce.\nAnother savory flavor added.\nផ្សំ ផង ណា\nIt is best because their Tteokbokki is so good.\nTheir rice cake is so chewy.\nCoated in a rich sweet and spicy sauce, ឡើង addictive ហ្មង ណា\nAnd this Aglio e Olio pasta វិញ ណា ឆ្ងាញ់ ណាស់\nThe best flavor of spice and garlic mixed together.\nThey also have a healthy option, which is Caesar Salad.\nSalad មិន តែ ប៉ុណ្ណោះ ឆ្ងាញ់ ណា\nSalad គេ ឡើង ឈ្ងុយ ហ្មង ណា\nOur last menu of today is Kimbap. What's Korean food without Kimbap?\nSo, if you are looking for a good Korean places where they serve both Korean and Western food, you can give Hanjang Coffee & Eatery a try.\nFrom Korean cuisine to their Korean signature drinks, like Strawberry Smoothie and Cappuccino, ពេល ដែល ខ្ញុំ ទៅ ហ្នឹង ឆ្ងាញ់ សឹង គ្រប់ មុខ ហ្មង\nAnd at night, they also serve drinks, គ្រឿង ត្រជាក់ ៗ យើង ហ្នឹង\nEspecially, they also have this viral Korean milk, មាន ទាំង រសជាតិ បាណាណា ទាំង រសជាតិ ស្ដ្រប៊េរី ហ្មង\nSo, don't forget to check out this hidden gem ណា\nThey are located in Toul Tompoung area.\nSo, what are you doing right now?\nYou are now watching, មក ទៅ ទាំងអស់ គ្នា\nLeave a like, let local see you better. Bye!"
   },
   "ground_truth": null,
   "extraction": null,
