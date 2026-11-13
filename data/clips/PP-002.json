@@ -1,0 +1,21 @@
+{
+  "clip_id": "PP-002",
+  "audio_file": "PP-002.wav",
+  "source": {
+    "url": "https://www.tiktok.com/@motokhiev.bydm/video/7706878472664222982",
+    "platform": "tiktok",
+    "creator": "@motokhiev.bydm",
+    "posted_at": "2026-11-11",
+    "collected_at": "2026-11-13"
+  },
+  "stt": {
+    "tool": null,
+    "model": null,
+    "settings": null,
+    "transcript": null
+  },
+  "ground_truth": null,
+  "extraction": null,
+  "fields": null,
+  "notes": null
+}
