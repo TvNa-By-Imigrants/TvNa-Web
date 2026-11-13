@@ -19,23 +19,21 @@ Each video becomes one clip file (`data/clips/PP-001.json`). Every stage is a sm
 
 ## Where we are now
 
-_Last updated: 2026-11-12_
+_Last updated: 2026-11-13_
 
 | Stage | What it does | Script | Status |
 |---|---|---|---|
 | 1. Collect | Paste a TikTok link → new clip file | `stage1_new_clip.py` | ✅ Built and tested |
 | 2. Video → audio | Download the video → 16 kHz mono WAV | `stage2_get_audio.py` | ✅ Built and tested |
-| 3. Audio → transcript | Gemini writes the Khmer + English transcript | `stage3_transcribe.py` | 🔜 **Next, being built** |
-| 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built (Phnom Penh check planned) |
+| 3. Audio → transcript | Gemini writes the Khmer + English transcript | `stage3_transcribe.py` | ✅ Built and tested |
+| 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built (model update and Phnom Penh check planned) |
 | 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built |
 | 5b. Team review | People check and fill missing fields | by hand + `stage5b_validate_clips.py` | ⏳ Validator planned |
 | 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built (fuzzy name matching planned) |
 | 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built |
 
-Until stage 3 is built, a new clip stops after stage 2.
-
 **Coming next, in order:**
-1. Stage 3: transcript
+1. Stage 4: switch to `gemini-3.6-flash` (Google deprecated `gemini-3.5-flash`)
 2. Automatic tests (`python -m unittest`)
 3. The clip validator
 4. Fuzzy name matching
@@ -93,7 +91,7 @@ On Windows, create the venv with `py -3.12 -m venv .venv` and activate it with `
 
 Each command does one stage, prints what it did and the next command, then stops so you can check.
 
-**Right now a new video can go through stages 1 and 2.** Stage 3 is being built, and stages 4–6 need its transcript.
+**A new video can now go through every stage.**
 
 **For each new video:**
 
@@ -103,11 +101,11 @@ git pull                                                  # get the team's lates
 
 python stage1_new_clip.py "<TikTok link>"                 # 1. ✅ new clip file: data/clips/PP-NNN.json
 python stage2_get_audio.py data/clips/PP-NNN.json         # 2. ✅ audio: data/audio/PP-NNN.wav
-# 3. 🔜 transcript: stage3_transcribe.py (being built)
-python stage4_extract_places.py data/clips/PP-NNN.json    # 4. ✅ places, from the transcript (--force to redo)
+python stage3_transcribe.py data/clips/PP-NNN.json        # 3. ✅ transcript, saved in the clip's stt
+python stage4_extract_places.py data/clips/PP-NNN.json    # 4. ✅ places, from the transcript
 ```
 
-Replace `PP-NNN` with the number stage 1 printed.
+Replace `PP-NNN` with the number stage 1 printed. Stages 2–4 also take several clips at once; one failing doesn't stop the others. Add `--force` to redo a clip.
 
 **Then, for all clips together:**
 
@@ -149,76 +147,92 @@ TvNa-Web/
 ## Stage 1: add a video
 
 ```sh
-python stage1_new_clip.py "https://www.tiktok.com/@user/video/7593339174695046416"
+python stage1_new_clip.py "<TikTok link>"
 ```
 
-What it does:
-1. **Refuses links that aren't TikTok.**
-2. **Expands short links:** a `vt.tiktok.com/...` link from TikTok's Share → Copy link is turned into the full link automatically.
-3. **Cleans the link:** the `?_r=...&_t=...` tracking part is removed.
-4. **Checks for duplicates:** if the same video is already in `data/clips/` or `data/clips/duplicates/`, it stops and creates nothing.
-5. **Makes the clip file:** `data/clips/PP-NNN.json`, with `clip_id`, `url`, `platform`, `creator` (from the link) and `collected_at` (today) filled in.
-
-Add the date the video was posted, if you know it:
-
-```sh
-python stage1_new_clip.py "<link>" --posted-at 2026-10-22
-```
+Makes a new clip file from a TikTok link. Short `vt.tiktok.com` links are expanded and the `?...` tracking part is removed. If the video is already in `data/clips/` (or `duplicates/`), nothing is created.
 
 You'll see:
 
 ```
-Created data/clips/PP-001.json
-  url:       https://www.tiktok.com/@user/video/7593339174695046416
-  creator:   @user
-  posted_at: null (add it by hand, or use --posted-at)
-Next: python stage2_get_audio.py data/clips/PP-001.json
+Created data/clips/PP-002.json
+  url:       https://www.tiktok.com/@motokhiev.bydm/video/7706878472664222982
+  creator:   @motokhiev.bydm
+  posted_at: null (stage 2 fills it from TikTok)
+Next: python stage2_get_audio.py data/clips/PP-002.json
 ```
 
 **Test it yourself:**
 
 | Try this | You should see |
 |---|---|
-| A TikTok link of a Phnom Penh place | `Created data/clips/PP-00N.json`. Open the file: `url` has no `?...` part and `creator` matches the video |
+| A Phnom Penh TikTok link | `Created data/clips/PP-00N.json` |
 | The same video again (full or short link) | `Duplicate: same video as PP-00N … Nothing created.` |
 | A YouTube or other link | `Only TikTok links are in scope … Nothing created.` |
-| `--posted-at 2026-13-01` | `… is not a date like 2026-10-22` |
 
 ---
 
 ## Stage 2: get the audio
 
 ```sh
-python stage2_get_audio.py data/clips/PP-001.json
+python stage2_get_audio.py data/clips/PP-002.json
 ```
 
-What it does:
-1. **Downloads the video** from the clip's TikTok link (with yt-dlp) into a temporary folder.
-2. **Makes the WAV:** `data/audio/PP-001.wav`, 16 kHz, mono, 16-bit (with ffmpeg). This is the format stage 3 needs.
-3. **Deletes the video.** Only the WAV is kept.
-4. **Updates the clip file:** sets `audio_file`. If `posted_at` is empty, it fills it with the date TikTok shows (Phnom Penh time).
+Downloads the video, keeps only its sound as `data/audio/PP-002.wav` (the format stage 3 needs), and fills `posted_at` if it's empty. WAVs are not in git: for a teammate's clip, just run stage 2 on it.
 
 You'll see:
 
 ```
-PP-001: downloading https://www.tiktok.com/@user/video/7593339174695046416 ...
-PP-001: saved data/audio/PP-001.wav (16 kHz, mono, 52.4 s)
-  posted_at: 2026-01-09 (from TikTok)
-Next: python stage3_transcribe.py data/clips/PP-001.json
+PP-002: downloading https://www.tiktok.com/@motokhiev.bydm/video/7706878472664222982 ...
+PP-002: saved data/audio/PP-002.wav (16 kHz, mono, 73.3 s)
+  posted_at: 2026-11-11 (from TikTok)
+Next: python stage3_transcribe.py data/clips/PP-002.json
 ```
-
-You can give it several clips at once (`data/clips/PP-002.json data/clips/PP-003.json`). If one fails, the others keep going, and a summary is printed at the end.
-
-WAV files are **not in git**. After `git pull`, a teammate's clip has `audio_file` set but no WAV on your computer: just run stage 2 on it, and it downloads the video again.
 
 **Test it yourself:**
 
 | Try this | You should see |
 |---|---|
-| The clip you made in stage 1 | `saved data/audio/PP-00N.wav (16 kHz, mono, … s)`. Play the WAV: it's the video's sound. The clip file now has `audio_file` (and `posted_at`, if it was empty) |
+| Your clip from stage 1 | `saved data/audio/PP-00N.wav …`. Play it: it's the video's sound |
 | The same command again | `already has audio … Skipped.` |
-| The same command with `--force` | It downloads the video and makes the WAV again |
-| A clip whose video was deleted or made private | `Download failed: …` then `Nothing changed in …`. The clip file isn't touched |
+| A clip whose video was deleted or private | `Download failed: …` then `Nothing changed in …` |
+
+---
+
+## Stage 3: get the transcript
+
+```sh
+python stage3_transcribe.py data/clips/PP-002.json
+```
+
+Sends the WAV to Gemini, which writes what is said: Khmer in Khmer script, English in English, no translation. Saved in the clip's `stt`. If `gemini-3.8-flash` is busy, it tries again, then switches to `gemini-3.6-flash`. `stt.model` shows which one did it. When Google is busy, this can take several minutes.
+
+You'll see (here Google was busy):
+
+```
+PP-002: transcribing data/audio/PP-002.wav (73.3 s) with gemini-3.8-flash ...
+  gemini-3.8-flash is busy (504), trying again in 10 s (2/3)
+  gemini-3.8-flash is busy (503), trying again in 30 s (3/3)
+  gemini-3.8-flash is still busy (503).
+  Trying gemini-3.6-flash instead ...
+  gemini-3.6-flash is busy (504), trying again in 10 s (2/3)
+PP-002: saved transcript (37 lines, gemini-3.6-flash)
+  ហាងម្ហូបកូរ៉េឆ្ងាញ់
+  មួយកន្លែងទៀតនៅ Toul Tompoung
+  សម្រាប់អ្នកដែលចូលចិត្តញ៉ាំបាយនៅកន្លែងដែលជនជាតិដើមគេបើកហ្មង ហា
+  ...
+Next: python stage4_extract_places.py data/clips/PP-002.json
+```
+
+If it ends with `Gemini is busy … Run the same command again later`, do that. Clips that already have a transcript are skipped.
+
+**Test it yourself:**
+
+| Try this | You should see |
+|---|---|
+| Your clip from stage 2 | `saved transcript (… lines, …)`. Open the clip: `stt.transcript` matches the video |
+| The same command again | `already has a transcript. Skipped.` |
+| A clip with no WAV | `No audio … Run stage 2 first` |
 
 ---
 

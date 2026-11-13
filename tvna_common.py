@@ -1,9 +1,10 @@
 """Shared helpers for the TVNA pipeline scripts (see docs/tvna_field_guide.md)."""
 import json
 import re
+import sys
 import unicodedata
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -47,6 +48,31 @@ def display_path(path) -> str:
         return str(Path(path).resolve().relative_to(Path.cwd().resolve()))
     except ValueError:
         return str(path)
+
+
+class ClipError(Exception):
+    """This clip can't be done. The message says why; the clip file is not changed."""
+
+
+def run_each(clip_paths: List[Path], work: Callable[[Path], str], next_command: str) -> None:
+    """Run work() on each clip; it returns "made" or "skipped", or raises ClipError.
+    One failing clip doesn't stop the others. Prints a summary and the next command; exits 1 if any failed."""
+    ok, failed, counts = [], [], {"made": 0, "skipped": 0}
+    for path in clip_paths:
+        try:
+            counts[work(path)] += 1
+            ok.append(display_path(path))
+        except ClipError as e:
+            print(f"{path.stem}: {e}\n  Nothing changed in {display_path(path)}.")
+            failed.append(path.stem)
+
+    if len(clip_paths) > 1:
+        print(f"Done: {counts['made']} made, {counts['skipped']} skipped, {len(failed)} failed"
+              + (f" ({', '.join(failed)})" if failed else ""))
+    if ok:
+        print(f"Next: {next_command} {' '.join(ok)}")
+    if failed:
+        sys.exit(1)
 
 
 def load_areas(path=AREAS_FILE) -> List[dict]:
@@ -108,8 +134,9 @@ def video_key(url: Optional[str]) -> Optional[str]:
     return f"{parts.netloc.lower().removeprefix('www.')}{parts.path.rstrip('/')}?{parts.query}"
 
 
-def gemini_client():
-    """Gemini client with GEMINI_API_KEY from .env. Retries busy/temporary errors (429, 5xx) with growing waits."""
+def gemini_client(attempts: int = 5):
+    """Gemini client with GEMINI_API_KEY from .env. Retries busy/temporary errors (429, 5xx) with growing waits.
+    attempts=1 turns the built-in retries off, for scripts that retry and report by themselves."""
     # Imported here so the scripts that never call Gemini don't load the package.
     from dotenv import load_dotenv
     from google import genai
@@ -117,4 +144,4 @@ def gemini_client():
 
     load_dotenv(BASE_DIR / ".env")
     return genai.Client(http_options=types.HttpOptions(
-        retry_options=types.HttpRetryOptions(attempts=5)))
+        retry_options=types.HttpRetryOptions(attempts=attempts)))

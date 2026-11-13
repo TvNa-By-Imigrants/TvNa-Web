@@ -139,7 +139,7 @@ def main():
     print(f"Created {shown}")
     print(f"  url:       {url}")
     print(f"  creator:   {creator}")
-    print(f"  posted_at: {args.posted_at or 'null (add it by hand, or use --posted-at)'}")
+    print(f"  posted_at: {args.posted_at or 'null (stage 2 fills it from TikTok)'}")
     print(f"Next: python stage2_get_audio.py {shown}")
 
 

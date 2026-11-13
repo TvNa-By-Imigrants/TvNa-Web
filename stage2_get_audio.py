@@ -23,16 +23,12 @@ from typing import Optional, Tuple
 
 import yt_dlp
 
-from tvna_common import AUDIO_DIR, CLIP_ID, display_path, load_json, save_json
+from tvna_common import AUDIO_DIR, CLIP_ID, ClipError, display_path, load_json, run_each, save_json
 
 CLEAN_TIKTOK_URL = re.compile(r"https://www\.tiktok\.com/@[^/?#]+/video/\d+")
 SAMPLE_RATE = 16000
 # Cambodia time (UTC+7, no daylight saving), so a late-night post keeps its local date.
 CAMBODIA = timezone(timedelta(hours=7))
-
-
-class ClipError(Exception):
-    """This clip can't be done. The message says why; the clip file is not changed."""
 
 
 class _QuietLogger:
@@ -165,22 +161,7 @@ def main():
     if not shutil.which("ffmpeg"):
         sys.exit("ffmpeg is not installed. Install it with: brew install ffmpeg (see README, Setup). Nothing changed.")
 
-    ok, failed, counts = [], [], {"made": 0, "skipped": 0}
-    for clip_path in args.clips:
-        try:
-            counts[get_audio(clip_path, args.audio_dir, args.force)] += 1
-            ok.append(display_path(clip_path))
-        except ClipError as e:
-            print(f"{clip_path.stem}: {e}\n  Nothing changed in {display_path(clip_path)}.")
-            failed.append(clip_path.stem)
-
-    if len(args.clips) > 1:
-        print(f"Done: {counts['made']} made, {counts['skipped']} skipped, {len(failed)} failed"
-              + (f" ({', '.join(failed)})" if failed else ""))
-    if ok:
-        print(f"Next: python stage3_transcribe.py {' '.join(ok)}")
-    if failed:
-        sys.exit(1)
+    run_each(args.clips, lambda path: get_audio(path, args.audio_dir, args.force), "python stage3_transcribe.py")
 
 
 if __name__ == "__main__":
