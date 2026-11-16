@@ -33,10 +33,10 @@ _Last updated: 2026-11-16_
 | 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built |
 
 **Coming next, in order:**
-1. Save the TikTok caption, for videos where the place name is only in text, not speech (to plan)
-2. Automatic tests (`python -m unittest`)
-3. The clip validator
-4. Fuzzy name matching
+1. Fuzzy name matching: "Han-Jan" and "Hanjang" become one place
+2. Accuracy loop: give Gemini the TikTok caption and a list of known names (made from the team's fixes), plus a test set of clips with the right answers, to measure mistakes
+3. Automatic tests (`python -m unittest`)
+4. The clip validator
 5. The Phnom Penh check in stage 4
 
 ---
@@ -245,6 +245,8 @@ python stage4_extract_places.py data/clips/PP-002.json
 ```
 
 Gemini reads the transcript and lists each place with what was said about it (category, menu, opinion …). The code then checks the district against `data/areas.json` and gives each place a status: `auto_added`, `needs_review` or `rejected`. Same busy handling as stage 3 (`gemini-3.6-flash`, backup `gemini-3.8-flash`). A `[no speech]` clip is skipped.
+
+Gemini reads up to 60 sentences at once, so a normal TikTok is read whole. A longer transcript is read in parts, and details about the same place from later parts are added to it.
 
 You'll see:
 

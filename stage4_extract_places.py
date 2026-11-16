@@ -40,6 +40,14 @@ from tvna_common import (
 # First model, then the backup when it is busy. extraction.model records the one(s) that did the work.
 MODELS = ["gemini-3.6-flash", "gemini-3.8-flash"]
 PROMPT_VERSION = "v4"
+# A normal TikTok fits in one part, so Gemini sees the whole video at once.
+# Longer ones are sent in parts; each part repeats the last 10 sentences of the one before.
+PART_SIZE = 60
+PART_STEP = 50
+# When the same place shows up again in a later part:
+FILL_IF_EMPTY = ["category", "sub_category", "price_range", "area_description", "opening_hours",
+                 "speaker_opinion", "notes"]
+COMBINE = ["place_name_alt", "menu_items", "area"]
 
 AREAS = load_areas()
 DISTRICTS = [a["district"] for a in AREAS]
@@ -141,7 +149,7 @@ def split_transcript(text: str) -> List[dict]:
     return [{"id": idx, "text": s} for idx, s in enumerate(combined or [text.strip()])]
 
 
-def windows(segments, size=20, step=15):
+def windows(segments, size=PART_SIZE, step=PART_STEP):
     i = 0
     while i < len(segments):
         yield segments[i:i + size]
@@ -181,14 +189,9 @@ def build_record(p, window):
 
     if not p.get("place_name"):
         flags.append("no_place_name")
-    if not seg_ids:
-        flags.append("no_valid_segment_ids")
     if norm(p.get("evidence_text", "")) not in window_text:
         flags.append("evidence_not_found_in_transcript")
-    if conf.get("place_name") in ["medium", "low"]:
-        flags.append("asr_spelling_or_uncertain_name")
-    if any(conf.get(k) == "low" for k in ("category", "price_range", "area")):
-        flags.append("low_confidence_field")
+    flags += checked_flags(conf, seg_ids)
 
     raw_missing = p.get("missing_reasons") or {}
     if hasattr(raw_missing, "model_dump"):
@@ -226,6 +229,45 @@ def build_record(p, window):
     return record
 
 
+def checked_flags(conf: dict, seg_ids: List[int]) -> List[str]:
+    """Flags that depend on the sentence numbers and Gemini's confidence."""
+    flags = []
+    if not seg_ids:
+        flags.append("no_valid_segment_ids")
+    if conf.get("place_name") in ["medium", "low"]:
+        flags.append("asr_spelling_or_uncertain_name")
+    if any(conf.get(k) == "low" for k in ("category", "price_range", "area")):
+        flags.append("low_confidence_field")
+    return flags
+
+
+def merge_record(first: dict, later: dict) -> None:
+    """Add what a later part says about a place that an earlier part already found.
+    Empty details are filled, lists are combined, filled details are kept. Then the score is redone."""
+    for key in COMBINE:
+        combined = list(dict.fromkeys((first.get(key) or []) + (later.get(key) or [])))
+        if key == "area" and not first.get("area") and combined:
+            first["confidence"]["area"] = later["confidence"].get("area")
+        first[key] = combined if combined or key == "place_name_alt" else None
+    for key in FILL_IF_EMPTY:
+        if not first.get(key) and later.get(key):
+            first[key] = later[key]
+            if key in ("category", "price_range"):
+                first["confidence"][key] = later["confidence"].get(key)
+    first["segment_ids"] = sorted(set(first["segment_ids"]) | set(later["segment_ids"]))
+    first["missing_reasons"] = {k: v for k, v in first["missing_reasons"].items() if not first.get(k)}
+
+    # evidence_text is still the first part's, so its check stays; an area problem from either part stays.
+    flags = [f for f in first["flags"] if f in ("no_place_name", "evidence_not_found_in_transcript")]
+    if "area_not_in_areas_list" in first["flags"] + later["flags"]:
+        flags.append("area_not_in_areas_list")
+    first["flags"] = flags + checked_flags(first["confidence"], first["segment_ids"])
+
+    score, missing_fields = completeness(first)
+    first.update(completeness=score, missing_fields=missing_fields,
+                 verification_status=verification_status(first, score))
+
+
 def extract_clip(client, path: Path, models: List[str], force: bool) -> str:
     """Find the places in one clip. Returns "made" or "skipped"; raises ClipError."""
     try:
@@ -253,9 +295,7 @@ def extract_clip(client, path: Path, models: List[str], force: bool) -> str:
         for p in places:
             key = norm(p.get("place_name") or "")
             if key and key in seen_places:
-                seen_places[key]["segment_ids"] = sorted(
-                    set(seen_places[key]["segment_ids"])
-                    | {i for i in p.get("segment_ids", [])})
+                merge_record(seen_places[key], build_record(p, window))
                 continue
             rec = build_record(p, window)
             records.append(rec)

@@ -29,15 +29,19 @@
       "sub_category": "Korean",
       "price_range": null,
       "area": null,
-      "area_description": null,
+      "area_description": "located in Toul Tompoung area",
       "google_maps_url": null,
       "opening_hours": null,
-      "speaker_opinion": "The Korean place serves great Tteokbokki with chewy rice cake in a rich sweet and spicy sauce, alongside very delicious Aglio e Olio pasta with a great blend of spice and garlic flavor. The fish cake soup has a light, savory broth with bouncy fish cakes, and they also offer Caesar Salad.",
+      "speaker_opinion": "It is a good place serving both Korean and Western food as well as signature drinks, where almost everything tastes delicious. Standout dishes include bouncy fish cake soup, chewy and addictive Tteokbokki, flavorful Aglio e Olio pasta, Caesar Salad, Kimbap, and drinks like Strawberry Smoothie and Cappuccino.",
       "menu_items": [
         "fish cake soup",
         "Tteokbokki",
         "Aglio e Olio pasta",
-        "Caesar Salad"
+        "Caesar Salad",
+        "Kimbap",
+        "Strawberry Smoothie",
+        "Cappuccino",
+        "viral Korean milk"
       ],
       "completeness": 0.67,
       "missing_fields": [
@@ -46,7 +50,7 @@
       "verification_status": "needs_review",
       "cleaned_by": null,
       "cleaner_note": null,
-      "notes": null,
+      "notes": "They also serve cold drinks at night.",
       "confidence": {
         "place_name": "high",
         "category": "high",
@@ -55,25 +59,16 @@
       },
       "missing_reasons": {
         "price_range": "not mentioned",
-        "area": "not mentioned",
-        "opening_hours": "not mentioned",
-        "area_description": "not mentioned"
+        "area": "only neighborhood Toul Tompoung is mentioned, no district named",
+        "opening_hours": "not mentioned"
       },
       "evidence_text": "But this time it is a Korean cuisine called Hanjang Coffee & Eatery.",
       "segment_ids": [
-        0,
-        1,
-        2,
-        3,
         4,
-        5,
         6,
-        7,
         8,
         9,
         10,
-        11,
-        12,
         13,
         14,
         15,
@@ -83,7 +78,6 @@
         19,
         20,
         21,
-        22,
         23,
         24,
         25,
