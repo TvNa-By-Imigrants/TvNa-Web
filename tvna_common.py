@@ -131,6 +131,21 @@ def verification_status(place: dict, score: float) -> str:
     return "auto_added"
 
 
+def reviewed_places(clip: dict) -> List[dict]:
+    """Places the team checked in stage 5b: a name in cleaned_by, or status verified."""
+    return [p for p in clip.get("fields") or []
+            if p.get("cleaned_by") or p.get("verification_status") == "verified"]
+
+
+def skip_reviewed(clip: dict, clip_id: str) -> bool:
+    """True (and says so) when the team reviewed a place in this clip, so a stage must not redo it."""
+    n = len(reviewed_places(clip))
+    if n:
+        print(f"{clip_id}: {n} place{'s were' if n > 1 else ' was'} reviewed by the team. "
+              "Skipped, so their fixes are kept.")
+    return n > 0
+
+
 def video_key(url: Optional[str]) -> Optional[str]:
     """Same TikTok video -> same key (its video id). Other links, e.g. short links, use the address."""
     if not url:

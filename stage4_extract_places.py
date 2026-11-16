@@ -34,6 +34,7 @@ from tvna_common import (
     norm,
     run_each,
     save_json,
+    skip_reviewed,
     verification_status,
 )
 
@@ -276,6 +277,8 @@ def extract_clip(client, path: Path, models: List[str], force: bool) -> str:
         raise ClipError(f"Can't read the clip file: {e}") from None
     clip_id = clip.get("clip_id") or path.stem
 
+    if skip_reviewed(clip, clip_id):
+        return "skipped"
     if clip.get("fields") is not None and not force:
         print(f"{clip_id}: already has places. Skipped. Use --force to find them again.")
         return "skipped"

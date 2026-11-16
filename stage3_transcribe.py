@@ -26,6 +26,7 @@ from tvna_common import (
     models_in_order,
     run_each,
     save_json,
+    skip_reviewed,
 )
 
 # First model, then the backup when it is busy. stt.model records the one that did the work.
@@ -104,6 +105,8 @@ def transcribe_clip(client, clip_path: Path, audio_dir: Path, models: list, forc
         raise ClipError(f"Can't read the clip file: {e}") from None
     clip_id = clip.get("clip_id") or clip_path.stem
 
+    if skip_reviewed(clip, clip_id):
+        return "skipped"
     if (clip.get("stt") or {}).get("transcript") and not force:
         print(f"{clip_id}: already has a transcript. Skipped. Use --force to transcribe again.")
         return "skipped"
@@ -113,7 +116,14 @@ def transcribe_clip(client, clip_path: Path, audio_dir: Path, models: list, forc
     text, model = transcribe(client, wav, models)
 
     clip["stt"] = {"tool": "gemini", "model": model, "settings": SETTINGS, "transcript": text}
+    # Old places point to sentence numbers of the old transcript, so stage 4 must find them again.
+    had_places = clip.get("fields") is not None
+    if had_places:
+        clip["extraction"] = None
+        clip["fields"] = None
     save_json(clip_path, clip)
+    if had_places:
+        print(f"{clip_id}: old places cleared (they came from the old transcript). Stage 4 will find them again.")
 
     if text == NO_SPEECH:
         print(f"{clip_id}: no speech (music only). Saved the transcript as {NO_SPEECH}.")

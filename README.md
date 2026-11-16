@@ -34,10 +34,18 @@ _Last updated: 2026-11-16_
 
 **Coming next, in order:**
 1. Fuzzy name matching: "Han-Jan" and "Hanjang" become one place
-2. Accuracy loop: give Gemini the TikTok caption and a list of known names (made from the team's fixes), plus a test set of clips with the right answers, to measure mistakes
+2. **Next milestone: the improvement loop** (below)
 3. Automatic tests (`python -m unittest`)
 4. The clip validator
 5. The Phnom Penh check in stage 4
+
+**The improvement loop.** Gemini forgets everything after each run, so we save the team's fixes and give them back to it:
+
+> Run stages 1–4 → team fixes mistakes (5b) → fixes are saved → next video gets them as hints → a test score shows if it improved
+
+- Fixes are saved automatically: `known_names.json` (right names + what Gemini misheard) and `mistakes.json` (which field was wrong).
+- Stages 3 and 4 get the known names and the TikTok caption as hints.
+- The first ~10 clips the team approves become a test set. A change to the prompt or model stays only if the score goes up.
 
 ---
 
@@ -105,7 +113,7 @@ python stage3_transcribe.py data/clips/PP-NNN.json        # 3. ✅ transcript, s
 python stage4_extract_places.py data/clips/PP-NNN.json    # 4. ✅ places, from the transcript
 ```
 
-Replace `PP-NNN` with the number stage 1 printed. Stages 2–4 also take several clips at once; one failing doesn't stop the others. Add `--force` to redo a clip.
+Replace `PP-NNN` with the number stage 1 printed. Stages 2–4 also take several clips at once; one failing doesn't stop the others. Add `--force` to redo a clip. Stages 3 and 4 never redo a clip the team already reviewed, even with `--force`.
 
 **Then, for all clips together:**
 
@@ -228,6 +236,8 @@ If it ends with `Gemini is busy … Run the same command again later`, do that. 
 
 A video with only music (nobody speaks) gets the transcript `[no speech]`. Song lyrics are not written down.
 
+With `--force`, the clip's old places are cleared too (they point to sentences of the old transcript), so run stage 4 again.
+
 **Test it yourself:**
 
 | Try this | You should see |
@@ -235,6 +245,7 @@ A video with only music (nobody speaks) gets the transcript `[no speech]`. Song 
 | Your clip from stage 2 | `saved transcript (… lines, …)`. Open the clip: `stt.transcript` matches the video |
 | The same command again | `already has a transcript. Skipped.` |
 | A clip with no WAV | `No audio … Run stage 2 first` |
+| `--force` on a clip that has places | `old places cleared … Stage 4 will find them again.` |
 
 ---
 
@@ -259,6 +270,8 @@ Next: python stage5a_dedupe_clips.py data/clips/*.json
 
 `needs_review` here because no district was named. The team fills it in stage 5b.
 
+A clip the team already reviewed (a name in `cleaned_by`, or status `verified`) is never redone, even with `--force`, so their fixes are kept.
+
 **Test it yourself:**
 
 | Try this | You should see |
@@ -266,6 +279,7 @@ Next: python stage5a_dedupe_clips.py data/clips/*.json
 | Your clip from stage 3 | `… place(s) found`, one line per place. Open the clip: each place is in `fields` |
 | The same command again | `already has places. Skipped.` |
 | A clip with no transcript | `No transcript yet. Run stage 3 first` |
+| Write your name in a place's `cleaned_by`, then run with `--force` | `1 place was reviewed by the team. Skipped, so their fixes are kept.` |
 
 ---
 
