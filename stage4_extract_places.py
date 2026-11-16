@@ -6,12 +6,13 @@ place_id stays null here; stage5c_match_places.py sets it.
 Needs GEMINI_API_KEY in .env (see README.md).
 
 Usage:
-    python stage4_extract_places.py data/clips/PP-001.json [data/clips/PP-002.json ...]
-    python stage4_extract_places.py data/clips/PP-001.json --force   # redo a clip that already has fields
+    python stage4_extract_places.py data/clips/PP-002.json [data/clips/PP-003.json ...]
+    python stage4_extract_places.py data/clips/PP-002.json --force   # redo a clip that already has fields
 """
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import List, Literal, Optional
 
@@ -20,18 +21,24 @@ from pydantic import BaseModel
 
 from tvna_common import (
     CATEGORIES,
+    NO_SPEECH,
+    ClipError,
     completeness,
+    display_path,
     gemini_client,
+    generate_with_backup,
     load_areas,
     load_json,
     match_districts,
+    models_in_order,
     norm,
+    run_each,
     save_json,
     verification_status,
 )
 
-DEFAULT_MODEL = "gemini-3.5-flash"
-FALLBACK_MODELS = ["gemini-3.5-flash"]
+# First model, then the backup when it is busy. extraction.model records the one(s) that did the work.
+MODELS = ["gemini-3.6-flash", "gemini-3.8-flash"]
 PROMPT_VERSION = "v4"
 
 AREAS = load_areas()
@@ -143,28 +150,20 @@ def windows(segments, size=20, step=15):
         i += step
 
 
-def call_model(client, window, model_name):
+def call_model(client, window, models):
     text = "\n".join(f"[{s['id']}] {s['text']}" for s in window)
-    models_to_try = [model_name] + [m for m in FALLBACK_MODELS if m != model_name]
-    last_err = None
-    for m in models_to_try:
-        try:
-            resp = client.models.generate_content(
-                model=m,
-                contents=f"Transcript excerpt:\n{text}",
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM,
-                    response_mime_type="application/json",
-                    response_schema=ExtractionResponse,
-                ),
-            )
-            if resp.parsed is not None:
-                return [p.model_dump() for p in resp.parsed.places], m
-            return json.loads(resp.text).get("places", []), m
-        except Exception as e:
-            last_err = e
-            continue
-    raise last_err
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM,
+        response_mime_type="application/json",
+        response_schema=ExtractionResponse,
+    )
+    resp, model = generate_with_backup(client, models, f"Transcript excerpt:\n{text}", config)
+    if resp.parsed is not None:
+        return [p.model_dump() for p in resp.parsed.places], model
+    try:
+        return json.loads(resp.text or "").get("places", []), model
+    except (ValueError, AttributeError):
+        raise ClipError(f"{model} did not answer in the expected format. Run the same command again.") from None
 
 
 def build_record(p, window):
@@ -227,17 +226,29 @@ def build_record(p, window):
     return record
 
 
-def extract_clip(client, path, model, force):
-    clip = load_json(path)
+def extract_clip(client, path: Path, models: List[str], force: bool) -> str:
+    """Find the places in one clip. Returns "made" or "skipped"; raises ClipError."""
+    try:
+        clip = load_json(path)
+    except (OSError, ValueError) as e:
+        raise ClipError(f"Can't read the clip file: {e}") from None
+    clip_id = clip.get("clip_id") or path.stem
+
     if clip.get("fields") is not None and not force:
-        return f"{path}: skipped, fields already filled (use --force to redo)"
+        print(f"{clip_id}: already has places. Skipped. Use --force to find them again.")
+        return "skipped"
     transcript = (clip.get("stt") or {}).get("transcript")
     if not transcript:
-        return f"{path}: skipped, stt.transcript is empty"
+        raise ClipError(f"No transcript yet. Run stage 3 first: python stage3_transcribe.py {display_path(path)}")
+    if transcript.strip() == NO_SPEECH:
+        print(f"{clip_id}: no speech in this video, so no places to find. Skipped.")
+        return "skipped"
 
+    segments = split_transcript(transcript)
+    print(f"{clip_id}: finding places in {len(segments)} sentences with {models[0]} ...", flush=True)
     records, seen_places, used_models = [], {}, set()
-    for window in windows(split_transcript(transcript)):
-        places, used_model = call_model(client, window, model)
+    for window in windows(segments):
+        places, used_model = call_model(client, window, models)
         used_models.add(used_model)
         for p in places:
             key = norm(p.get("place_name") or "")
@@ -267,29 +278,27 @@ def extract_clip(client, path, model, force):
     updated["fields"] = records
     save_json(path, updated)
 
-    counts = {}
+    print(f"{clip_id}: {len(records)} place{'' if len(records) == 1 else 's'} found ({extraction['model']})")
     for r in records:
-        counts[r["verification_status"]] = counts.get(r["verification_status"], 0) + 1
-    return f"{path}: {len(records)} places {counts}"
+        print(f"  - {r['place_name'] or '(no name)'} ({r['category'] or 'no category'}): {r['verification_status']}")
+    return "made"
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("clips", nargs="+", help="Clip JSON files made in stages 1-3")
-    ap.add_argument("--model", default=DEFAULT_MODEL, help="Model used for extraction")
+    ap.add_argument("clips", nargs="+", type=Path, help="Clip files made in stages 1-3, e.g. data/clips/PP-002.json")
+    ap.add_argument("--model", default=MODELS[0], help=f"Gemini model to try first (default {MODELS[0]})")
     ap.add_argument("--force", action="store_true", help="Redo clips whose fields are already filled")
     args = ap.parse_args()
+    models = models_in_order(args.model, MODELS)
 
-    client = gemini_client()
+    try:
+        client = gemini_client(attempts=1)
+    except ValueError:
+        sys.exit("GEMINI_API_KEY is missing. Add it to .env (see README, Setup). Nothing changed.")
 
-    for path in args.clips:
-        if not Path(path).is_file():
-            print(f"{path}: file not found")
-            continue
-        try:
-            print(extract_clip(client, path, args.model, args.force))
-        except Exception as e:
-            print(f"{path}: failed, file not changed: {e}")
+    run_each(args.clips, lambda path: extract_clip(client, path, models, args.force),
+             "python stage5a_dedupe_clips.py data/clips/*.json")
 
 
 if __name__ == "__main__":

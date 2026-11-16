@@ -36,7 +36,7 @@ This is the main file. Every stage adds to it. Start each new clip from `tvna_cl
   "ground_truth": null,
   "extraction": {
     "method": "llm",
-    "model": "gemini-3.5-flash",
+    "model": "gemini-3.6-flash",
     "prompt_version": "v4"
   },
   "fields": [

@@ -9,23 +9,27 @@ Usage:
 """
 import argparse
 import sys
-import time
 import unicodedata
 import wave
 from pathlib import Path
-from typing import Optional
 
-from google.genai import errors, types
+from google.genai import types
 
-from tvna_common import AUDIO_DIR, ClipError, display_path, gemini_client, load_json, run_each, save_json
+from tvna_common import (
+    AUDIO_DIR,
+    NO_SPEECH,
+    ClipError,
+    display_path,
+    gemini_client,
+    generate_with_backup,
+    load_json,
+    models_in_order,
+    run_each,
+    save_json,
+)
 
 # First model, then the backup when it is busy. stt.model records the one that did the work.
 MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"]
-TRIES_PER_MODEL = 3
-WAITS = [10, 30]  # seconds before try 2 and try 3
-TRY_TIME_LIMIT_MS = 3 * 60 * 1000
-BUSY_CODES = {429, 500, 503, 504}
-NO_SPEECH = "[no speech]"
 SETTINGS = "km+en code-switching prompt v1"
 # Google allows 20 MB per request; bigger audio is uploaded with the Files API instead.
 INLINE_LIMIT = 15 * 1024 * 1024
@@ -65,30 +69,6 @@ def seconds(wav: Path) -> float:
         raise ClipError(f"{display_path(wav)} is not a valid WAV ({e}). Run stage 2 again with --force.") from None
 
 
-def ask_model(client, model: str, audio) -> Optional[str]:
-    """Up to TRIES_PER_MODEL tries. Returns the reply text, or None when the model stays busy or is not found."""
-    config = types.GenerateContentConfig(http_options=types.HttpOptions(timeout=TRY_TIME_LIMIT_MS))
-    for attempt in range(1, TRIES_PER_MODEL + 1):
-        try:
-            return client.models.generate_content(model=model, contents=[PROMPT, audio], config=config).text or ""
-        except errors.APIError as e:
-            if e.code == 404:
-                print(f"  {model} was not found.", flush=True)
-                return None
-            if e.code not in BUSY_CODES:
-                raise ClipError(f"Gemini failed: {e.code} {e.status}: {e.message}") from None
-            reason = f"busy ({e.code})"
-        except Exception as e:
-            reason = f"not answering ({type(e).__name__})"
-        if attempt < TRIES_PER_MODEL:
-            wait = WAITS[attempt - 1]
-            print(f"  {model} is {reason}, trying again in {wait} s ({attempt + 1}/{TRIES_PER_MODEL})", flush=True)
-            time.sleep(wait)
-        else:
-            print(f"  {model} is still {reason}.", flush=True)
-    return None
-
-
 def transcribe(client, wav: Path, models: list) -> tuple:
     """Return (transcript, model used). Tries each model in turn while the earlier ones are busy."""
     uploaded = None
@@ -100,15 +80,8 @@ def transcribe(client, wav: Path, models: list) -> tuple:
                 audio = uploaded = client.files.upload(file=str(wav), config=types.UploadFileConfig(mime_type="audio/wav"))
             except Exception as e:
                 raise ClipError(f"Couldn't upload the audio to Gemini: {e}") from None
-        for i, model in enumerate(models):
-            if i:
-                print(f"  Trying {model} instead ...", flush=True)
-            text = ask_model(client, model, audio)
-            if text is not None:
-                break
-        else:
-            raise ClipError(f"Gemini is busy (tried {', '.join(models)}). Run the same command again later: "
-                            "clips that already have a transcript are skipped.")
+        resp, model = generate_with_backup(client, models, [PROMPT, audio])
+        text = resp.text or ""
     finally:
         if uploaded:
             try:
@@ -161,7 +134,7 @@ def main():
     ap.add_argument("--model", default=MODELS[0], help=f"Gemini model to try first (default {MODELS[0]})")
     ap.add_argument("--audio-dir", type=Path, default=AUDIO_DIR)
     args = ap.parse_args()
-    models = [args.model] + [m for m in MODELS if m != args.model]
+    models = models_in_order(args.model, MODELS)
 
     try:
         client = gemini_client(attempts=1)
@@ -169,7 +142,7 @@ def main():
         sys.exit("GEMINI_API_KEY is missing. Add it to .env (see README, Setup). Nothing changed.")
 
     run_each(args.clips, lambda path: transcribe_clip(client, path, args.audio_dir, models, args.force),
-             "python stage4_extract_places.py")
+             "python stage4_extract_places.py {clips}")
 
 
 if __name__ == "__main__":

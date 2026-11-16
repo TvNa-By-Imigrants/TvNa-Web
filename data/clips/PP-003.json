@@ -15,7 +15,61 @@
     "transcript": "Hello guys, welcome to ALWAYS selfie booth.\nចាស ឥឡូវនេះនៅក្នុងហាងយើងបាន update ច្រើនមែនទែនទាំងអស់គ្នា យើងមាន salon ឲ្យទាំងអស់គ្នាអង្គុយរង់ចាំ។\nចំណែកខាងនេះ ទាំងអស់គ្នាអាចរើស frame ហើយនិងពណ៌ background ដែលទាំងអស់គ្នាពេញចិត្ត មុននឹងចូលទៅថតនៅខាងក្នុង។\nនៅទីនេះ យើងក៏មានផ្លិត កញ្ចក់ធំ ហើយមានភ្លើងស្អាតសម្រាប់ឆ្លុះ ហើយក៏មានម៉ាស៊ីនកៀបសក់ ជាមួយនិង makeup ដែលទាំងអស់គ្នាអាចរៀបចំខ្លួនបាន មុននឹងចូលថត។\nបន្ទាប់ពីរៀបចំខ្លួនហើយ គឺអ្នកទាំងអស់គ្នាអាចរើស head accessories ដែលនៅជិតហ្នឹងបាន គឺយើងមានច្រើនមែនទែនទាំងអស់គ្នា ហើយទាំងអស់គ្នាអាចរើសបានមួយសេរី។\nងាកមកមួយខាងទៀត នេះគឺជាបន្ទប់ថតរូបរបស់យើង។\nចាស នៅក្នុងបន្ទប់ថតរូបរបស់យើង គឺមានទីធ្លាធំទូលាយមែនទែន ក្នុងនេះក៏យើងមាន decor ខ្លះៗដែរ។\nឥឡូវនេះ យើងក៏កំពុងត្រៀមរៀបចំបន្ទប់ថតរូបមួយទៀតដែរទាំងអស់គ្នា ដែលនៅជាប់នឹងបន្ទប់ទី១ទេ so waiting for our new studio room, guys.\nតោះ ចឹងបើអ្នកទាំងអស់គ្នាចង់មកថតរូបស្អាតៗ កុំភ្លេចមក ALWAYS selfie booth.\nThank you, bye."
   },
   "ground_truth": null,
-  "extraction": null,
-  "fields": null,
+  "extraction": {
+    "method": "llm",
+    "model": "gemini-3.6-flash",
+    "prompt_version": "v4"
+  },
+  "fields": [
+    {
+      "place_id": null,
+      "place_name": "ALWAYS selfie booth",
+      "place_name_alt": [],
+      "category": "entertainment",
+      "sub_category": "Selfie booth",
+      "price_range": null,
+      "area": null,
+      "area_description": null,
+      "google_maps_url": null,
+      "opening_hours": null,
+      "speaker_opinion": "កន្លែងថតរូបនេះមានការ update ថ្មី ដោយមានកន្លែងអង្គុយរង់ចាំ អាចជ្រើសរើស frame និង background តាមចិត្ត មានកញ្ចក់ ភ្លើង ម៉ាស៊ីនកៀបសក់ និង makeup សម្រាប់រៀបចំខ្លួន ព្រមទាំងមាន head accessories យ៉ាងច្រើន និងបន្ទប់ថតរូបធំទូលាយស្អាត។",
+      "menu_items": null,
+      "completeness": 0.67,
+      "missing_fields": [
+        "area"
+      ],
+      "verification_status": "needs_review",
+      "cleaned_by": null,
+      "cleaner_note": null,
+      "notes": "ហាងកំពុងរៀបចំបន្ទប់ថតរូបថ្មីមួយទៀតនៅជាប់បន្ទប់ទី១។",
+      "confidence": {
+        "place_name": "high",
+        "category": "high",
+        "price_range": null,
+        "area": null
+      },
+      "missing_reasons": {
+        "price_range": "not mentioned",
+        "area": "not mentioned",
+        "opening_hours": "not mentioned",
+        "area_description": "not mentioned",
+        "menu_items": "not mentioned"
+      },
+      "evidence_text": "Hello guys, welcome to ALWAYS selfie booth.",
+      "segment_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "flags": []
+    }
+  ],
   "notes": null
 }

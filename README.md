@@ -19,26 +19,25 @@ Each video becomes one clip file (`data/clips/PP-001.json`). Every stage is a sm
 
 ## Where we are now
 
-_Last updated: 2026-11-13_
+_Last updated: 2026-11-16_
 
 | Stage | What it does | Script | Status |
 |---|---|---|---|
 | 1. Collect | Paste a TikTok link → new clip file | `stage1_new_clip.py` | ✅ Built and tested |
 | 2. Video → audio | Download the video → 16 kHz mono WAV | `stage2_get_audio.py` | ✅ Built and tested |
 | 3. Audio → transcript | Gemini writes the Khmer + English transcript | `stage3_transcribe.py` | ✅ Built and tested |
-| 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built (model update and Phnom Penh check planned) |
+| 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built and tested (Phnom Penh check planned) |
 | 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built |
 | 5b. Team review | People check and fill missing fields | by hand + `stage5b_validate_clips.py` | ⏳ Validator planned |
 | 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built (fuzzy name matching planned) |
 | 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built |
 
 **Coming next, in order:**
-1. Stage 4: switch to `gemini-3.6-flash` (Google deprecated `gemini-3.5-flash`)
-2. Save the TikTok caption, for videos where the place name is only in text, not speech (to plan)
-3. Automatic tests (`python -m unittest`)
-4. The clip validator
-5. Fuzzy name matching
-6. The Phnom Penh check in stage 4
+1. Save the TikTok caption, for videos where the place name is only in text, not speech (to plan)
+2. Automatic tests (`python -m unittest`)
+3. The clip validator
+4. Fuzzy name matching
+5. The Phnom Penh check in stage 4
 
 ---
 
@@ -239,9 +238,38 @@ A video with only music (nobody speaks) gets the transcript `[no speech]`. Song 
 
 ---
 
-## Stages 4–6
+## Stage 4: find the places
 
-Built. They need the transcript from stage 3 first. The commands are in [How to run](#how-to-run).
+```sh
+python stage4_extract_places.py data/clips/PP-002.json
+```
+
+Gemini reads the transcript and lists each place with what was said about it (category, menu, opinion …). The code then checks the district against `data/areas.json` and gives each place a status: `auto_added`, `needs_review` or `rejected`. Same busy handling as stage 3 (`gemini-3.6-flash`, backup `gemini-3.8-flash`). A `[no speech]` clip is skipped.
+
+You'll see:
+
+```
+PP-002: finding places in 33 sentences with gemini-3.6-flash ...
+PP-002: 1 place found (gemini-3.6-flash)
+  - Hanjang Coffee & Eatery (restaurant): needs_review
+Next: python stage5a_dedupe_clips.py data/clips/*.json
+```
+
+`needs_review` here because no district was named. The team fills it in stage 5b.
+
+**Test it yourself:**
+
+| Try this | You should see |
+|---|---|
+| Your clip from stage 3 | `… place(s) found`, one line per place. Open the clip: each place is in `fields` |
+| The same command again | `already has places. Skipped.` |
+| A clip with no transcript | `No transcript yet. Run stage 3 first` |
+
+---
+
+## Stages 5–6
+
+Built. The commands are in [How to run](#how-to-run).
 
 ---
 

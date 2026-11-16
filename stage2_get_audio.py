@@ -162,7 +162,7 @@ def main():
     if not shutil.which("ffmpeg"):
         sys.exit("ffmpeg is not installed. Install it with: brew install ffmpeg (see README, Setup). Nothing changed.")
 
-    run_each(args.clips, lambda path: get_audio(path, args.audio_dir, args.force), "python stage3_transcribe.py")
+    run_each(args.clips, lambda path: get_audio(path, args.audio_dir, args.force), "python stage3_transcribe.py {clips}")
 
 
 if __name__ == "__main__":
