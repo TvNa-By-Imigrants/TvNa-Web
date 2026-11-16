@@ -1,12 +1,15 @@
 """Shared helpers for the TVNA pipeline scripts (see docs/tvna_field_guide.md)."""
+import difflib
 import json
 import re
 import sys
 import time
 import unicodedata
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -28,6 +31,16 @@ COMPLETENESS_FIELDS = ["place_name", "area", "speaker_opinion"]
 TIKTOK_VIDEO_ID = re.compile(r"tiktok\.com/.*/video/(\d+)")
 CLIP_ID = re.compile(r"PP-(\d+)")
 NO_SPEECH = "[no speech]"  # stage 3's transcript for a video where nobody speaks
+
+USER_AGENT = "tvna-pipeline/0.1"
+MAX_REDIRECTS = 5
+
+# Spellings that mean the same, so names match either way (add Khmer pairs the team finds here).
+SAME_LETTERS = {"ឲ": "ឱ", "&": "and"}
+KHMER = re.compile(r"[ក-៿]")
+# The place code in a full Google Maps link (e.g. .../data=...!1s0x3109513dc76a6be3:0xeac5420f72706db0!...).
+MAPS_PLACE_CODE = re.compile(r"(?:!1s|[?&]ftid=)(0x[0-9a-f]+:0x[0-9a-f]+)|[?&](query_place_id|cid)=([^&#]+)", re.I)
+MAPS_SHORT_HOSTS = {"maps.app.goo.gl", "goo.gl"}
 
 GEMINI_TRIES_PER_MODEL = 3
 GEMINI_WAITS = [10, 30]  # seconds before try 2 and try 3
@@ -155,6 +168,67 @@ def video_key(url: Optional[str]) -> Optional[str]:
         return f"tiktok:{m.group(1)}"
     parts = urlsplit(url.strip())
     return f"{parts.netloc.lower().removeprefix('www.')}{parts.path.rstrip('/')}?{parts.query}"
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def follow_redirects(url: str, wanted: re.Pattern, site: str, thing: str) -> str:
+    """Follow a short link's redirects (without opening the page) until a link matching `wanted` appears.
+    Raises ValueError with a short reason."""
+    opener = urllib.request.build_opener(_NoRedirect)
+    current = url
+    for _ in range(MAX_REDIRECTS):
+        request = urllib.request.Request(current, headers={"User-Agent": USER_AGENT})
+        try:
+            with opener.open(request, timeout=15):
+                raise ValueError(f"{site} did not redirect to a {thing}")
+        except urllib.error.HTTPError as e:
+            location = e.headers.get("Location")
+            if e.code not in (301, 302, 303, 307, 308) or not location:
+                raise ValueError(f"{site} answered {e.code} {e.reason}") from None
+            current = urljoin(current, location)
+        except urllib.error.URLError as e:
+            raise ValueError(f"no connection ({e.reason})") from None
+        if wanted.search(current):
+            return current
+    raise ValueError(f"too many redirects, no {thing} link found")
+
+
+def name_key(name: Optional[str]) -> str:
+    """A place name ready to compare: lowercase, no spaces, punctuation or symbols, é = e, & = and.
+    Khmer vowel signs and the coeng stay: dropping them would make different names look the same."""
+    text = unicodedata.normalize("NFD", name or "")
+    text = "".join(ch for ch in text if not "̀" <= ch <= "ͯ")  # accents on Latin letters only
+    text = unicodedata.normalize("NFC", text).lower()
+    for spelling, same in SAME_LETTERS.items():
+        text = text.replace(spelling, same)
+    return "".join(ch for ch in text if unicodedata.category(ch)[0] not in "PZSC")
+
+
+def name_score(a: Optional[str], b: Optional[str]) -> int:
+    """How alike two place names are, 0-100 (100 = the same after name_key). Rounded down, so 94.7 is not a 95."""
+    return int(difflib.SequenceMatcher(None, name_key(a), name_key(b)).ratio() * 100)
+
+
+def has_khmer(text: Optional[str]) -> bool:
+    return bool(KHMER.search(text or ""))
+
+
+def maps_key(url: Optional[str]) -> Optional[str]:
+    """The place code in a Google Maps link, the same for every link to one place. Short Share links
+    (maps.app.goo.gl) are followed first. None for no link; ValueError if the link has no place code."""
+    if not url or not url.strip():
+        return None
+    url = url.strip()
+    if not MAPS_PLACE_CODE.search(url) and urlsplit(url).netloc.lower() in MAPS_SHORT_HOSTS:
+        url = follow_redirects(url, MAPS_PLACE_CODE, "Google Maps", "place")
+    m = MAPS_PLACE_CODE.search(url)
+    if not m:
+        raise ValueError("no place code in this link (use the Share link of the place)")
+    return f"fid:{m.group(1).lower()}" if m.group(1) else f"{m.group(2).lower()}:{m.group(3)}"
 
 
 def gemini_client(attempts: int = 5):

@@ -11,51 +11,30 @@ Usage:
 import argparse
 import re
 import sys
-import urllib.error
-import urllib.request
 from datetime import date
 from pathlib import Path
 from typing import List, Tuple
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urlsplit
 
-from tvna_common import CLIP_ID, CLIPS_DIR, TEMPLATES_DIR, display_path, load_json, save_json, video_key
+from tvna_common import (
+    CLIP_ID,
+    CLIPS_DIR,
+    TEMPLATES_DIR,
+    display_path,
+    follow_redirects,
+    load_json,
+    save_json,
+    video_key,
+)
 
 TEMPLATE_FILE = TEMPLATES_DIR / "tvna_clip_template.json"
 TIKTOK_VIDEO_URL = re.compile(r"tiktok\.com/(@[^/?#]+)/video/(\d+)")
-USER_AGENT = "tvna-pipeline/0.1"
-MAX_REDIRECTS = 5
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
 
 
 def is_tiktok(url: str) -> bool:
     parts = urlsplit(url)
     host = parts.netloc.lower()
     return parts.scheme in ("http", "https") and (host == "tiktok.com" or host.endswith(".tiktok.com"))
-
-
-def expand_short_link(url: str) -> str:
-    """Follow TikTok's redirects (without opening the page) until a /@user/video/<id> link appears."""
-    opener = urllib.request.build_opener(_NoRedirect)
-    current = url
-    for _ in range(MAX_REDIRECTS):
-        request = urllib.request.Request(current, headers={"User-Agent": USER_AGENT})
-        try:
-            with opener.open(request, timeout=15):
-                raise ValueError("TikTok did not redirect to a video")
-        except urllib.error.HTTPError as e:
-            location = e.headers.get("Location")
-            if e.code not in (301, 302, 303, 307, 308) or not location:
-                raise ValueError(f"TikTok answered {e.code} {e.reason}") from None
-            current = urljoin(current, location)
-        except urllib.error.URLError as e:
-            raise ValueError(f"no connection ({e.reason})") from None
-        if TIKTOK_VIDEO_URL.search(current):
-            return current
-    raise ValueError("too many redirects, no video link found")
 
 
 def clean_tiktok_url(url: str) -> Tuple[str, str]:
@@ -105,7 +84,7 @@ def main():
 
     if not TIKTOK_VIDEO_URL.search(url):
         try:
-            short, url = url, expand_short_link(url)
+            short, url = url, follow_redirects(url, TIKTOK_VIDEO_URL, "TikTok", "video")
         except ValueError as e:
             sys.exit(f"Couldn't expand the short link: {e}\n"
                      "Open it in your browser and paste the full link (.../@user/video/<number>). Nothing created.")

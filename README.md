@@ -29,15 +29,14 @@ _Last updated: 2026-11-16_
 | 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built and tested (Phnom Penh check planned) |
 | 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built |
 | 5b. Team review | People check and fill missing fields | by hand + `stage5b_validate_clips.py` | ⏳ Validator planned |
-| 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built (fuzzy name matching planned) |
+| 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built and tested |
 | 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built |
 
 **Coming next, in order:**
-1. Fuzzy name matching: "Han-Jan" and "Hanjang" become one place
-2. **Next milestone: the improvement loop** (below)
-3. Automatic tests (`python -m unittest`)
-4. The clip validator
-5. The Phnom Penh check in stage 4
+1. **Next milestone: the improvement loop** (below)
+2. Automatic tests (`python -m unittest`)
+3. The clip validator
+4. The Phnom Penh check in stage 4
 
 **The improvement loop.** Gemini forgets everything after each run, so we save the team's fixes and give them back to it:
 
@@ -283,7 +282,50 @@ A clip the team already reviewed (a name in `cleaned_by`, or status `verified`) 
 
 ---
 
-## Stages 5–6
+## Stage 5c: match places
+
+```sh
+python stage5c_match_places.py data/clips/*.json
+```
+
+Run after the team review (5b). Gives each place a `place_id` from `data/places.json`, so clips about the same place count as one. Each place is checked in this order:
+
+| Check | Result |
+|---|---|
+| Same Google Maps link | matched (even a Khmer and an English name) |
+| Same name or alias (capitals, spaces, punctuation, "&"/"and", "é"/"e", "ឲ"/"ឱ" don't matter) | matched |
+| Name score 95% or more (not for Khmer names) | matched, new spelling saved as an alias |
+| Score 75–94%, one name inside the other, or a close Khmer name | **unclear**: `place_id` stays null |
+| Anything else | new place |
+
+**For each unclear place:** write the suggested `place_id` in the clip if it's the same place, or `"new"` if not, then run 5c again. Every name that gets a `place_id` is saved as an alias, so it matches exactly next time.
+
+You'll see (here a second clip spelled the name differently):
+
+```
+matched (1):
+  PP-099.json  "Han-Jan Coffee & Eatery" -> tvna_p_0001 (fuzzy 97% like "Hanjang Coffee & Eatery"; new aliases: Han-Jan Coffee & Eatery)
+new (2):
+  PP-002.json  "Hanjang Coffee & Eatery" -> tvna_p_0001
+  PP-003.json  "ALWAYS selfie booth" -> tvna_p_0002
+unclear (0):
+unknown_id (0):
+skipped (0): already have a place_id, rejected, or no name
+Next: python stage6_build_final_dataset.py data/clips/*.json
+```
+
+**Test it yourself:**
+
+| Try this | You should see |
+|---|---|
+| A clip with a slightly different spelling of a known place | `matched … (fuzzy 9N% like "…")` |
+| "Luv selfie booth" when "ALWAYS selfie booth" is known | `unclear … maybe tvna_p_0002 "ALWAYS selfie booth" (77%)` |
+| Write that `place_id` in the clip, run again | `set by the team; new aliases: Luv selfie booth` |
+| The same command again | nothing new; places with a `place_id` are skipped |
+
+---
+
+## Stages 5a and 6
 
 Built. The commands are in [How to run](#how-to-run).
 
@@ -300,6 +342,6 @@ Built. The commands are in [How to run](#how-to-run).
 
 ## More detail
 
-- [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md) explains every field, who fills it, and the value rules. Note: the guide still uses the old script names (for example `extract_places_gemini.py`, now `stage4_extract_places.py`). It will be updated.
+- [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md) explains every field, who fills it, and the value rules. Note: the guide still uses the old script names (for example `extract_places_gemini.py`, now `stage4_extract_places.py`), and its section 8 still says "exact match only" (see Stage 5c above). It will be updated.
 - [`docs/tvna_data_model.png`](docs/tvna_data_model.png) shows how the JSON files connect.
 - [`docs/tvna_pipeline_overview.png`](docs/tvna_pipeline_overview.png) shows the stages at a glance.
