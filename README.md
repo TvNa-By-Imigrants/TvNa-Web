@@ -127,6 +127,8 @@ python stage6_build_final_dataset.py data/clips/*.json    # 6.  ✅ build data/f
 
 Each stage has its own section below with what it does and a "Test it yourself" table.
 
+**After changing a script:** run its offline checks, e.g. `python tests/test_stage4.py`. They use fake Gemini and fake TikTok, cost nothing and never touch `data/`. Each prints `N/N passed`.
+
 ---
 
 ## Folder layout
@@ -149,7 +151,7 @@ TvNa-Web/
 │   └── final_dataset.json         ← made by stage 6
 ├── templates/                     ← empty JSON templates for every file type
 ├── docs/                          ← field guide and diagrams
-└── tests/                         ← automatic tests (coming)
+└── tests/                         ← offline checks: python tests/test_stage4.py (no Gemini, no internet)
 ```
 
 ---
