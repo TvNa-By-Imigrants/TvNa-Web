@@ -3,21 +3,23 @@
   "extraction": {
     "method": "llm",
     "model": "gemini-3.6-flash",
-    "prompt_version": "v4"
+    "prompt_version": "v5"
   },
   "fields": [
     {
       "place_id": null,
-      "place_name": "Hanjang Coffee & Eatery",
-      "place_name_alt": [],
+      "place_name": "Hanjan Coffee",
+      "place_name_alt": [
+        "Hanjang Coffee & Eatery"
+      ],
       "category": "restaurant",
       "sub_category": "Korean",
       "price_range": null,
       "area": null,
-      "area_description": "located in Toul Tompoung area",
+      "area_description": "Toul Tompoung area",
       "google_maps_url": null,
       "opening_hours": null,
-      "speaker_opinion": "It is a good place serving both Korean and Western food as well as signature drinks, where almost everything tastes delicious. Standout dishes include bouncy fish cake soup, chewy and addictive Tteokbokki, flavorful Aglio e Olio pasta, Caesar Salad, Kimbap, and drinks like Strawberry Smoothie and Cappuccino.",
+      "speaker_opinion": "This Korean place run by native Koreans serves both Korean and Western food, with almost everything tasting great. Highlight dishes include chewy Tteokbokki with rich sweet and spicy sauce, light fish cake soup, Aglio e Olio pasta, Caesar Salad, Kimbap, signature drinks, and viral Korean milk.",
       "menu_items": [
         "fish cake soup",
         "Tteokbokki",
@@ -26,7 +28,7 @@
         "Kimbap",
         "Strawberry Smoothie",
         "Cappuccino",
-        "viral Korean milk"
+        "Korean milk (banana and strawberry flavors)"
       ],
       "completeness": 0.67,
       "missing_fields": [
@@ -35,7 +37,7 @@
       "verification_status": "needs_review",
       "cleaned_by": null,
       "cleaner_note": null,
-      "notes": "They also serve cold drinks at night.",
+      "notes": null,
       "confidence": {
         "place_name": "high",
         "category": "high",
@@ -44,16 +46,22 @@
       },
       "missing_reasons": {
         "price_range": "not mentioned",
-        "area": "only neighborhood Toul Tompoung is mentioned, no district named",
+        "area": "only Toul Tompoung neighborhood mentioned, no district named",
         "opening_hours": "not mentioned"
       },
       "evidence_text": "But this time it is a Korean cuisine called Hanjang Coffee & Eatery.",
       "segment_ids": [
+        2,
+        3,
         4,
+        5,
         6,
+        7,
         8,
         9,
         10,
+        11,
+        12,
         13,
         14,
         15,
@@ -63,6 +71,7 @@
         19,
         20,
         21,
+        22,
         23,
         24,
         25,
@@ -70,7 +79,9 @@
         27,
         28
       ],
-      "flags": []
+      "flags": [
+        "name_from_caption"
+      ]
     }
   ]
 }

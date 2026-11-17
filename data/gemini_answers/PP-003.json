@@ -3,21 +3,23 @@
   "extraction": {
     "method": "llm",
     "model": "gemini-3.6-flash",
-    "prompt_version": "v4"
+    "prompt_version": "v5"
   },
   "fields": [
     {
       "place_id": null,
-      "place_name": "ALWAYS selfie booth",
-      "place_name_alt": [],
+      "place_name": "Luv selfie booth",
+      "place_name_alt": [
+        "ALWAYS selfie booth"
+      ],
       "category": "entertainment",
-      "sub_category": "Selfie booth",
+      "sub_category": "Photo booth",
       "price_range": null,
       "area": null,
-      "area_description": null,
+      "area_description": "IFL",
       "google_maps_url": null,
       "opening_hours": null,
-      "speaker_opinion": "កន្លែងថតរូបនេះមានការ update ថ្មី ដោយមានកន្លែងអង្គុយរង់ចាំ អាចជ្រើសរើស frame និង background តាមចិត្ត មានកញ្ចក់ ភ្លើង ម៉ាស៊ីនកៀបសក់ និង makeup សម្រាប់រៀបចំខ្លួន ព្រមទាំងមាន head accessories យ៉ាងច្រើន និងបន្ទប់ថតរូបធំទូលាយស្អាត។",
+      "speaker_opinion": "ទីតាំងថតរូបដែលមានការ update ថ្មី មានកន្លែងអង្គុយរង់ចាំ មាន frame ពណ៌ background កញ្ចក់ភ្លើង ម៉ាស៊ីនកៀបសក់ makeup និង head accessories ជាច្រើនសម្រាប់រៀបចំខ្លួន។ បន្ទប់ថតរូបមានទីធ្លាធំទូលាយ មាន decor ស្អាត សម្រាប់មកថតរូបស្អាតៗ។",
       "menu_items": null,
       "completeness": 0.67,
       "missing_fields": [
@@ -26,7 +28,7 @@
       "verification_status": "needs_review",
       "cleaned_by": null,
       "cleaner_note": null,
-      "notes": "ហាងកំពុងរៀបចំបន្ទប់ថតរូបថ្មីមួយទៀតនៅជាប់បន្ទប់ទី១។",
+      "notes": null,
       "confidence": {
         "place_name": "high",
         "category": "high",
@@ -35,12 +37,11 @@
       },
       "missing_reasons": {
         "price_range": "not mentioned",
-        "area": "not mentioned",
+        "area": "no district mentioned in the allowed list",
         "opening_hours": "not mentioned",
-        "area_description": "not mentioned",
         "menu_items": "not mentioned"
       },
-      "evidence_text": "Hello guys, welcome to ALWAYS selfie booth.",
+      "evidence_text": "Welcome to Luv selfie booth",
       "segment_ids": [
         0,
         1,
@@ -50,10 +51,11 @@
         5,
         6,
         7,
-        8,
-        9
+        8
       ],
-      "flags": []
+      "flags": [
+        "name_from_caption"
+      ]
     }
   ]
 }
