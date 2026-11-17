@@ -104,12 +104,12 @@ c = load(p)
 model, contents, config = FAKE.models.calls[-1]
 check("1 normal: one call to gemini-3.6-flash, SDK retries off", code == 0 and len(FAKE.models.calls) == 1
       and model == "gemini-3.6-flash" and CLIENT_ARGS[-1] == {"attempts": 1}, out)
-check("1 normal: same prompt v4 + JSON schema, 3-minute limit",
+check("1 normal: same prompt v5 + JSON schema, 3-minute limit",
       config.system_instruction == s4.SYSTEM and config.response_schema is s4.ExtractionResponse
       and config.response_mime_type == "application/json" and config.http_options.timeout == 180000
       and "[0] Today we visit Tea Kingdom in Chamkar Mon." in contents)
 check("1 normal: extraction records the real model",
-      c["extraction"] == {"method": "llm", "model": "gemini-3.6-flash", "prompt_version": "v4"}, c["extraction"])
+      c["extraction"] == {"method": "llm", "model": "gemini-3.6-flash", "prompt_version": "v5"}, c["extraction"])
 f = c["fields"][0] if c["fields"] else {}
 check("1 normal: place saved with checks (area, completeness, status)",
       len(c["fields"]) == 1 and f["place_name"] == "Tea Kingdom" and f["area"] == ["Chamkar Mon"]
@@ -146,7 +146,7 @@ raw = p4.read_bytes()
 reset(plan={"gemini-3.6-flash": [BUSY()] * 3, "gemini-3.8-flash": [BUSY()] * 3})
 code, out = run(p4)
 check("4 all busy: clip unchanged, 'run again later'", code == 1 and p4.read_bytes() == raw
-      and "Gemini is busy (tried gemini-3.6-flash, gemini-3.8-flash). Run the same command again later" in out, out)
+      and "Gemini is busy (tried gemini-3.6-flash, gemini-3.8-flash). Try this clip again later." in out, out)
 
 # 5. parts: a normal TikTok (33 sentences, like PP-002) is one part; 80 sentences are 2 parts
 reset()
@@ -195,8 +195,8 @@ check("6a no transcript: run stage 3 first", code == 1 and "No transcript yet. R
 reset()
 p6 = clip("PP-007", transcript="[no speech]")
 code, out = run(p6)
-check("6b [no speech]: skipped, no API call, fields stay null",
-      code == 0 and "no speech in this video, so no places to find. Skipped." in out and not FAKE.models.calls
+check("6b [no speech], no caption: skipped, no API call, fields stay null",
+      code == 0 and "no speech and no caption, so no places to find. Skipped." in out and not FAKE.models.calls
       and load(p6)["fields"] is None, out)
 
 # 7. answer as JSON text / broken answer
@@ -228,6 +228,16 @@ reset()
 code, out = run(clip("PP-012"), clip("PP-013", transcript=None))
 check("9 several: summary, exit 1, Next stage 5a", code == 1 and "Done: 1 made, 0 skipped, 1 failed (PP-013)" in out
       and "Next: python stage5a_dedupe_clips.py data/clips/*.json" in out, out)
+retry = out.split("To try only the failed clip again: ")[-1].strip()
+check("9 retry line: only the failed clip, same options", retry == f"python stage4_extract_places.py "
+      f"{CLIPS / 'PP-013.json'} --answers-dir {ANSWERS}", retry)
+reset(plan={"gemini-3.6-flash": [answer(place())] + [BUSY()] * 3, "gemini-3.8-flash": [BUSY()] * 3})
+done, busy = clip("PP-014"), clip("PP-015")
+code, out = run(done, busy, "--force")
+retry = out.split("To try only the failed clip again: ")[-1].strip()
+check("9 busy with --force: retry line keeps --force and leaves out the clip that worked (so it isn't redone)",
+      code == 1 and retry == f"python stage4_extract_places.py {busy} --force --answers-dir {ANSWERS}"
+      and "Run the same command again" not in out, out)
 
 # 11. --force guard: places the team reviewed are never redone
 def reviewed_clip(name, **place_over):
@@ -343,6 +353,218 @@ for i, (kind, fields, transcript, first_calls) in enumerate([
     check(f"R {kind}: 1st run {first_calls} Gemini call(s); 2nd run skipped, no call, clip and answer unchanged",
           calls == first_calls and code == 0 and "Skipped" in out and not FAKE.models.calls
           and p.read_bytes() == raw and (ans.read_bytes() if ans.exists() else None) == ans_raw, out)
+
+# C. the TikTok caption (prompt v5)
+CAPTION = "Comfortable and unique, best quality.Welcome to Luv selfie booth 😉📸 #luvselfiebooth #IFL @sponsor"
+HEARD = ("Today we go to ALWAYS selfie booth.\n"
+         "You can take many photos here.\n"
+         "Follow for more!")
+
+def with_caption(name, caption, transcript=HEARD):
+    p = clip(name, transcript=transcript)
+    c = load(p)
+    if caption is MISSING:
+        del c["source"]["caption"]
+    else:
+        c["source"]["caption"] = caption
+    p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
+
+def luv(**over):
+    return place(**dict(dict(place_name="Luv selfie booth", place_name_alt=["ALWAYS selfie booth"],
+                             category="entertainment", area=None, price_range=None,
+                             evidence_text="Welcome to Luv selfie booth", segment_ids=[0, 1]), **over))
+
+check("C1 prompt v5 says how to use the caption",
+      "TIKTOK CAPTION" in s4.SYSTEM and "the caption's spelling" in s4.SYSTEM and "Moon Night Noodle House" in s4.SYSTEM
+      and "name_source" in s4.SYSTEM
+      and "A hashtag or an @account alone is never a place" in s4.SYSTEM and s4.PROMPT_VERSION == "v5")
+
+pc = with_caption("PP-500", CAPTION)
+reset(default=answer(luv()))
+code, out = run(pc)
+f = (load(pc)["fields"] or [{}])[0]
+sent = FAKE.models.calls[-1][1] if FAKE.models.calls else ""
+check("C2 caption sent to Gemini after the numbered transcript",
+      sent.startswith("Transcript excerpt:\n[0] Today we go to ALWAYS selfie booth.")
+      and sent.endswith(f"\n\nTikTok caption (written by the creator; it has no segment ids):\n<caption>\n{CAPTION}\n</caption>"),
+      sent)
+check("C2 caption spelling is the name, heard spelling kept in place_name_alt",
+      f.get("place_name") == "Luv selfie booth" and f.get("place_name_alt") == ["ALWAYS selfie booth"], f)
+check("C2 name only in the caption -> flag name_from_caption; evidence found in the caption -> no evidence flag",
+      "name_from_caption" in f.get("flags", []) and "evidence_not_found_in_transcript" not in f.get("flags", []), f)
+check("C2 printed: name from caption, also called …",
+      "Luv selfie booth (entertainment): needs_review, name from caption; also called ALWAYS selfie booth" in out, out)
+
+for i, (kind, cap) in enumerate([("null", None), ("spaces", "   ")]):
+    q = with_caption(f"PP-51{i}", cap)
+    reset()
+    run(q)
+    sent = FAKE.models.calls[-1][1] if FAKE.models.calls else ""
+    check(f"C3 caption {kind} (video has none): no caption block sent", "TikTok caption" not in sent and "[0] Today" in sent,
+          sent)
+for i, (kind, cap) in enumerate([('""', ""), ("missing", MISSING)]):
+    q = with_caption(f"PP-51{i + 5}", cap)
+    raw = q.read_bytes()
+    reset()
+    code, out = run(q)
+    first_calls = len(FAKE.models.calls)
+    reset()
+    code2, out2 = run(q)
+    check(f"C3 caption {kind} (not read yet): refused twice, run stage 2 first, no Gemini call, clip unchanged",
+          code == code2 == 1 and "The TikTok caption hasn't been read yet. Run stage 2" in out
+          and "write null in source.caption" in out and first_calls == 0 and not FAKE.models.calls
+          and q.read_bytes() == raw, out)
+
+q = with_caption("PP-520", "Tea Kingdom 🍵", transcript=TRANSCRIPT)
+reset()
+run(q)
+f = load(q)["fields"][0]
+check("C4 name said and in the caption -> no name_from_caption", "name_from_caption" not in f["flags"], f)
+q = with_caption("PP-521", CAPTION)
+reset(default=answer(luv(evidence_text="Brown Coffee is the best")))
+run(q)
+f = load(q)["fields"][0]
+check("C4 evidence in neither the transcript nor the caption -> evidence_not_found_in_transcript",
+      "evidence_not_found_in_transcript" in f["flags"], f)
+q = with_caption("PP-522", "Our new spot 📍 Brown Coffee, Toul Kork")
+reset(default=answer(place(place_name="Brown Coffee", evidence_text="Brown Coffee, Toul Kork", segment_ids=[])))
+run(q)
+f = load(q)["fields"][0]
+check("C5 speech video, place named only in the caption, no sentence ids -> name_from_caption, no no_valid_segment_ids",
+      "name_from_caption" in f["flags"] and "no_valid_segment_ids" not in f["flags"] and f["segment_ids"] == [], f)
+
+# [no speech] + caption: read from the caption only
+pn = with_caption("PP-530", CAPTION, transcript="[no speech]")
+reset(default=answer(luv(place_name_alt=[], segment_ids=[])))
+code, out = run(pn)
+c = load(pn)
+f = (c["fields"] or [{}])[0]
+sent = FAKE.models.calls[-1][1] if FAKE.models.calls else ""
+check("C6 [no speech] + caption: one call, Gemini told nobody speaks, caption sent",
+      code == 0 and len(FAKE.models.calls) == 1 and sent.startswith("Transcript: [no speech] (nobody speaks")
+      and CAPTION in sent and "no speech; finding places in the TikTok caption" in out, out)
+check("C6 [no speech] + caption: place saved, name_from_caption, no sentence ids and no no_valid_segment_ids flag",
+      f.get("place_name") == "Luv selfie booth" and f.get("segment_ids") == []
+      and "name_from_caption" in f.get("flags", []) and "no_valid_segment_ids" not in f.get("flags", [])
+      and (ANSWERS / "PP-530.json").exists(), f)
+raw = pn.read_bytes()
+reset()
+code, out = run(pn)
+check("C6 R 2nd run: skipped, no call, file unchanged", "Skipped" in out and not FAKE.models.calls and pn.read_bytes() == raw,
+      out)
+q = with_caption("PP-540", None, transcript="[no speech]")
+reset()
+code, out = run(q)
+check("C6 [no speech], caption null: skipped, no call, fields stay null",
+      code == 0 and not FAKE.models.calls and load(q)["fields"] is None and "no speech and no caption" in out, out)
+for i, (kind, cap) in enumerate([('""', ""), ("missing", MISSING)]):
+    q = with_caption(f"PP-54{i + 1}", cap, transcript="[no speech]")
+    reset()
+    code, out = run(q)
+    check(f"C6 [no speech], caption {kind}: refused (stage 2 first), no call, fields stay null",
+          code == 1 and not FAKE.models.calls and load(q)["fields"] is None and "hasn't been read yet" in out, out)
+
+q = with_caption("PP-550", CAPTION)
+reset(default=answer(luv(place_name_alt=["ALWAYS selfie booth", "#luvselfiebooth", " @luv ", "  ", "ALWAYS selfie booth"]),
+                     place(place_name="@sponsor", evidence_text="@sponsor", area=None)))
+code, out = run(q)
+fs = load(q)["fields"]
+check("C7 tags, blanks and repeats left out of place_name_alt",
+      fs[0]["place_name_alt"] == ["ALWAYS selfie booth"], fs[0]["place_name_alt"])
+check("C7 a name that is only an @account: kept for the team but rejected, flag name_is_tag, said so",
+      len(fs) == 2 and fs[1]["place_name"] == "@sponsor" and fs[1]["verification_status"] == "rejected"
+      and "name_is_tag" in fs[1]["flags"] and "@sponsor (cafe): rejected, only a tag, not a place name" in out, (fs, out))
+for i, order in enumerate([["real", "tag"], ["tag", "real"]]):
+    q = with_caption(f"PP-55{i + 1}", CAPTION)
+    items = {"real": luv(), "tag": luv(place_name=" #luvselfiebooth ", place_name_alt=[], menu_items=["photo strip"])}
+    reset(default=answer(*(items[k] for k in order)))
+    run(q)
+    fs = {x["place_name"]: x for x in load(q)["fields"]}
+    real, tag = fs.get("Luv selfie booth", {}), fs.get(" #luvselfiebooth ", {})
+    check(f"C7 the place's own #hashtag as another record ({' first, '.join(order)} last): never joined, so the real "
+          "place keeps its name; the tag record is rejected",
+          len(fs) == 2 and real.get("place_name_alt") == ["ALWAYS selfie booth"]
+          and real.get("verification_status") == "needs_review" and tag.get("verification_status") == "rejected"
+          and "name_is_tag" in tag.get("flags", []), fs)
+
+# a long video in 2 parts: the caption goes with every part; spoken in part 2 -> not "from caption"
+LONG = "\n".join([f"Sentence number {i} about the day." for i in range(65)] + ["Luv selfie booth is really fun."])
+q = with_caption("PP-560", CAPTION, transcript=LONG)
+reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[])),
+                                  answer(luv(place_name_alt=[], evidence_text="Luv selfie booth is really fun",
+                                             segment_ids=[65]))]})
+run(q)
+c = load(q)
+f = (c["fields"] or [{}])[0]
+check("C8 2 parts: caption sent with each part", len(FAKE.models.calls) == 2
+      and all(CAPTION in call[1] for call in FAKE.models.calls), len(FAKE.models.calls))
+check("C8 merged: one place, sentence 65 kept, spoken in part 2 so no name_from_caption",
+      len(c["fields"]) == 1 and f.get("segment_ids") == [65] and "name_from_caption" not in f.get("flags", ["x"])
+      and "no_valid_segment_ids" not in f.get("flags", ["x"]), f)
+
+# D. review fixes: checks that the caption must not weaken
+def one(p_item, transcript=HEARD, caption=CAPTION, name="PP-600"):
+    q = with_caption(name, caption, transcript=transcript)
+    reset(default=answer(p_item))
+    run(q, "--force")
+    return (load(q)["fields"] or [{}])[0]
+
+f = one(luv(segment_ids=[7, 9]))
+check("D1 name from the caption but made-up sentence numbers -> still no_valid_segment_ids",
+      "name_from_caption" in f["flags"] and "no_valid_segment_ids" in f["flags"], f)
+f = one(place(place_name="Totally Made Up", evidence_text="", segment_ids=[0]))
+check("D2 empty evidence_text -> evidence_not_found_in_transcript", "evidence_not_found_in_transcript" in f["flags"], f)
+f = one(luv(place_name="Luv Selfie Booth Phnom Penh", place_name_alt=[], segment_ids=[]), transcript="[no speech]")
+check("D3 [no speech]: name_from_caption even when Gemini's name isn't word for word in the caption; no ids flag",
+      "name_from_caption" in f["flags"] and "no_valid_segment_ids" not in f["flags"], f)
+f = one(place(place_name="Brown Coffee", area=["Tuol Kouk"], evidence_text="Brown Coffee, Tuol Kouk", segment_ids=[]),
+        caption="Thanks to our sponsor Brown Coffee, Tuol Kouk, best coffee!")
+check("D4 complete place named only in the caption: needs_review, never auto_added",
+      f["completeness"] == 1.0 and f["verification_status"] == "needs_review" and "name_from_caption" in f["flags"], f)
+for i, bad_field in enumerate([{"place_name_alt": ["Tea King", None, 5]}, {"place_name": ["Luv"]},
+                                 {"menu_items": "photo strip"}]):
+    q, ok = with_caption(f"PP-60{5 + i}", None, transcript=TRANSCRIPT), with_caption(f"PP-61{5 + i}", None, transcript=TRANSCRIPT)
+    raw = q.read_bytes()
+    bad = place(segment_ids=[0]).model_dump() | bad_field
+    reset(plan={"gemini-3.6-flash": [SimpleNamespace(parsed=None, text=json.dumps({"places": [bad]}))]})
+    code, out = run(q, ok)
+    check(f"D5 JSON-text answer with a wrong type ({next(iter(bad_field))}): that clip fails cleanly, the next one "
+          "still runs", code == 1 and "did not answer in the expected format. Try this clip again." in out
+          and q.read_bytes() == raw and load(ok)["fields"] and f"To try only the failed clip again: python stage4_extract_places.py {q}" in out,
+          out)
+check("D6 prompt prefers the English name, caption's spelling; caption has no segment ids",
+      "English name if one is said or written" in s4.SYSTEM and "between <caption> and </caption>" in s4.SYSTEM
+      and "Never give an id for something only the caption says" in s4.SYSTEM)
+LONG2 = "\n".join([f"Sentence number {i} about the day." for i in range(65)] + ["Luv selfie booth is really fun!"])
+q = with_caption("PP-610", CAPTION, transcript=LONG2)
+reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[])),
+                                  answer(luv(place_name="Luv Selfie-Booth!", place_name_alt=[],
+                                             evidence_text="Luv selfie booth is really fun", segment_ids=[65]))]})
+run(q)
+check("D7 parts merged when names differ only in capitals and punctuation", len(load(q)["fields"]) == 1,
+      load(q)["fields"])
+
+# E. second review fixes
+f = one(luv(place_name="Brown Coffee & Bakery", place_name_alt=[], name_source="caption", area=["Tuol Kouk"],
+            evidence_text="Brown Coffee", segment_ids=[0]), caption="Thanks to our sponsor Brown Coffee, Tuol Kouk")
+check("E1 Gemini says the name is from the caption (not word for word) -> name_from_caption, not auto_added",
+      "name_from_caption" in f["flags"] and f["verification_status"] == "needs_review", f)
+f = one(place(place_name="Ice", area=["Tuol Kouk"], evidence_text="Ice, Tuol Kouk", segment_ids=[]),
+        transcript="The rice here is so nice and the price is fair.", caption="Sponsored by Ice, Tuol Kouk")
+check("E2 complete place but no valid sentence ('ice' inside 'rice'): never auto_added",
+      f["completeness"] == 1.0 and f["verification_status"] == "needs_review", f)
+f = one(luv(place_name="#luvselfiebooth #IFL", place_name_alt=[]))
+check("E3 a name made of several tags -> name_is_tag, rejected",
+      "name_is_tag" in f["flags"] and f["verification_status"] == "rejected", f)
+f = one(luv(place_name="📍", place_name_alt=[]))
+check("E4 a name with no letters (only a symbol) -> no_place_name, rejected",
+      "no_place_name" in f["flags"] and f["verification_status"] == "rejected", f)
+f = one(luv(place_name_alt=["Luv selfie booth", "ALWAYS selfie booth", "Always Selfie-Booth", "LUV SELFIE BOOTH"]))
+check("E5 place_name_alt: the main name and same names in other capitals/punctuation left out",
+      f["place_name_alt"] == ["ALWAYS selfie booth"], f["place_name_alt"])
+f = one(place(segment_ids=[0, 1]), transcript=TRANSCRIPT, caption="Tea Kingdom 🍵")
+check("E6 a normal spoken place, transcript backs it: still auto_added", f["verification_status"] == "auto_added", f)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

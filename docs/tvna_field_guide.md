@@ -38,7 +38,7 @@ This is the main file. Every stage adds to it. Start each new clip from `tvna_cl
   "extraction": {
     "method": "llm",
     "model": "gemini-3.6-flash",
-    "prompt_version": "v4"
+    "prompt_version": "v5"
   },
   "fields": [
     {
@@ -191,7 +191,7 @@ Anything not filled yet stays `null`.
 | 1. Collect data | Person | `clip_id`, `source` (url, platform, creator, posted_at, collected_at) | none, start from `tvna_clip_template.json` |
 | 2. Video to audio | Script | `audio_file`, `source.caption` (the creator's TikTok caption, hashtags included; `null` if none), `source.posted_at` if empty | `stage2_get_audio.py` |
 | 3. Audio to transcript | Script + Gemini | `stt`. Person: `ground_truth` (test clips only) | in `audio-text/` |
-| 4. Transcript to fields | LLM + code | `extraction` and every place in `fields` (see below) | `extract_places_gemini.py` |
+| 4. Transcript + caption to fields | LLM + code | `extraction` and every place in `fields` (see below) | `extract_places_gemini.py` |
 | 5a. Remove duplicates | Script | moves duplicate clip files, adds `duplicate_of` | `dedupe_clips.py` |
 | 5b. Team review | Team | `area` (if empty), `google_maps_url`, missing values, `cleaned_by`, `cleaner_note`, status `verified` or `rejected` | none, edit the clip file |
 | 5c. Match places | Script, then team | `place_id` (never the LLM), places.json | `match_places.py` |
@@ -206,16 +206,16 @@ In stage 4:
 
 | Field | Rule |
 |---|---|
-| `place_name` | Name as spoken, in English if an English name is said |
-| `place_name_alt` | Khmer name and other names said **in this clip only**. All known names go in `aliases` in places.json |
+| `place_name` | The English name if one is said or written, otherwise the Khmer name. When the TikTok caption writes that name, the caption's spelling is used (speech-to-text may mishear it). In 5b the team picks the right one (it may swap it with a name in `place_name_alt`) |
+| `place_name_alt` | Every other name said or written **in this clip only**: Khmer name, English name, and the heard spelling when it differs from the caption (e.g. "ALWAYS selfie booth" when the caption says "Luv selfie booth"). Never a #hashtag or @account. All known names go in `aliases` in places.json |
 | `category` | One value from the category list (section 9) |
 | `sub_category` | Short free text, e.g. "tea", "Vietnamese" |
-| `price_range` | Only if said for this place, as spoken, e.g. "$5-10", "10,000 riel" |
-| `area` | **List** of districts from areas.json. Code fills it only when the speaker names a district (English or Khmer). A list because one place can have branches in several districts |
-| `area_description` | What the speaker said about the location, e.g. "near Russian Market". Filled even when `area` is filled |
-| `opening_hours` | Only if said, as spoken, e.g. "7am-10pm" |
+| `price_range` | Only if said or written (caption) for this place, as given, e.g. "$5-10", "10,000 riel" |
+| `area` | **List** of districts from areas.json. Filled only when the speaker or the caption names a district (English or Khmer). A list because one place can have branches in several districts |
+| `area_description` | What the speaker or the caption says about the location, e.g. "near Russian Market", "📍 Toul Kork". Filled even when `area` is filled |
+| `opening_hours` | Only if said or written, as given, e.g. "7am-10pm" |
 | `speaker_opinion` | Summary of why a visitor would go (section 4) |
-| `menu_items` | List of food and drink items named for this place, as spoken |
+| `menu_items` | List of food and drink items named for this place, in the video or the caption |
 | `notes` | Other useful details about this place, e.g. a promo |
 
 A neighborhood (BKK1, Toul Tom Poung) is **not** a district. It goes in `area_description`, and the team picks the district.
@@ -226,15 +226,17 @@ A neighborhood (BKK1, Toul Tom Poung) is **not** a district. It goes in `area_de
 |---|---|
 | `confidence` | "high", "medium", "low" or null for `place_name`, `category`, `price_range`, `area` |
 | `missing_reasons` | Why a field is null, e.g. "not mentioned" |
-| `evidence_text` | A short piece copied exactly from the transcript that shows the place name |
-| `segment_ids` | Numbers of the transcript sentences about this place |
+| `evidence_text` | A short piece copied exactly from the transcript or the caption that shows the place name |
+| `segment_ids` | Numbers of the transcript sentences about this place. Can be `[]` when only the caption names it |
 | `flags` | Warnings for the team (table below) |
 
 | Flag | Meaning | What the team does |
 |---|---|---|
-| `no_place_name` | No name found | Status is already `rejected`. Check if the name was missed |
-| `no_valid_segment_ids` | The LLM gave sentence numbers that do not exist | Check the transcript |
-| `evidence_not_found_in_transcript` | `evidence_text` is not in the transcript; the LLM may have made it up | Check the name in the transcript |
+| `no_place_name` | No name found, or the "name" has no letters (e.g. only "📍") | Status is already `rejected`. Check if the name was missed |
+| `no_valid_segment_ids` | The LLM gave sentence numbers that do not exist (not used for a place named only in the caption) | Check the transcript |
+| `evidence_not_found_in_transcript` | `evidence_text` is in neither the transcript nor the caption; the LLM may have made it up | Check the name in the transcript and caption |
+| `name_from_caption` | `place_name` is written in the caption but not said in the video (not said at all, or heard differently). Set when Gemini says so or the code sees it. Every place of a `[no speech]` clip has it. Such a place is never `auto_added` | Check it is the place the video shows, not a sponsor; pick the right name from `place_name` / `place_name_alt` |
+| `name_is_tag` | The "name" is only @accounts or #hashtags. Status is already `rejected` | If it really is the place, write its real name and change the status |
 | `asr_spelling_or_uncertain_name` | Name confidence is medium or low; maybe a speech-to-text spelling error | Check the spelling on Google Maps |
 | `low_confidence_field` | `category`, `price_range` or `area` has low confidence | Check those fields |
 | `area_not_in_areas_list` | The LLM gave an area that is not a district; it was moved to `area_description` | Pick the district |
@@ -243,12 +245,12 @@ A neighborhood (BKK1, Toul Tom Poung) is **not** a district. It goes in `area_de
 
 ## 4. `speaker_opinion` (how the LLM writes it)
 
-- 1 to 3 sentences: why a visitor would want to go to **this** place, based only on what the speaker says.
+- 1 to 3 sentences: why a visitor would want to go to **this** place, based only on what the speaker says or the creator writes in the caption.
 - Covers what is good or interesting: taste, price or value, choices, atmosphere, space, seating, photo spots, service, decor, theme or story.
 - Rewritten in clear words, with the same meaning. Never stronger than the speaker said; no added praise or facts.
 - Leaves out the speaker's own story (why they came, their trip, greetings, "follow us").
 - Written in the language the speaker uses for this place. Not translated.
-- `null` if the speaker says nothing good or interesting about the place.
+- `null` if nothing good or interesting is said or written about the place.
 
 Real output from `clips/02.json` (prompt v4): "The shop has many kinds of motorbikes available starting from $9 per day, and the owner is generous and kind."
 
@@ -265,9 +267,9 @@ These 3 come from the team's research on 10 clips. The other fields are still ex
 
 | Result | `verification_status` |
 |---|---|
-| No `place_name` | `rejected` (kept in the file, not deleted) |
+| No `place_name`, or the name is only a tag (`name_is_tag`) | `rejected` (kept in the file, not deleted) |
 | 0.33 or 0.67 | `needs_review` (team fills missing fields) |
-| 1.0 | `auto_added` (still checked later) |
+| 1.0 | `auto_added` (still checked later); `needs_review` if the transcript doesn't back it up (`name_from_caption`, or no valid sentence numbers) |
 
 The rule in code: no name or below 0.3 → `rejected`; 0.7 or below → `needs_review`; above 0.7 → `auto_added`.
 

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Stage 4: transcript -> fields, with the Gemini API.
-Reads a clip file made in stages 1-3, uses stt.transcript, and writes only "extraction"
+"""Stage 4: transcript + TikTok caption -> fields, with the Gemini API.
+Reads a clip file made in stages 1-3, uses stt.transcript and source.caption, and writes only "extraction"
 and "fields" back into the same file.
-A copy of the places as Gemini gave them goes to data/gemini_answers/<clip_id>.json. Nobody edits it,
-so after the team review we can see what Gemini got wrong.
+The caption's spelling of a place name becomes place_name; every other name (the spoken one too) goes in
+place_name_alt, so no name is lost. A [no speech] clip with a caption is read from the caption only.
+Stage 2 must have read the caption first (a saved null = the video has no caption).
+A copy of the places as stage 4 made them (Gemini's answer after the code's checks) goes to
+data/gemini_answers/<clip_id>.json. Nobody edits it, so after the team review we can see what Gemini got wrong.
 place_id stays null here; stage5c_match_places.py sets it.
 Needs GEMINI_API_KEY in .env (see README.md).
 
@@ -19,13 +22,14 @@ from pathlib import Path
 from typing import List, Literal, Optional
 
 from google.genai import types
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from tvna_common import (
     CATEGORIES,
     GEMINI_ANSWERS_DIR,
     NO_SPEECH,
     ClipError,
+    as_list,
     completeness,
     display_path,
     gemini_client,
@@ -35,6 +39,7 @@ from tvna_common import (
     load_json,
     match_districts,
     models_in_order,
+    name_key,
     norm,
     run_each,
     save_json,
@@ -44,7 +49,7 @@ from tvna_common import (
 
 # First model, then the backup when it is busy. extraction.model records the one(s) that did the work.
 MODELS = ["gemini-3.6-flash", "gemini-3.8-flash"]
-PROMPT_VERSION = "v4"
+PROMPT_VERSION = "v5"
 # A normal TikTok fits in one part, so Gemini sees the whole video at once.
 # Longer ones are sent in parts; each part repeats the last 10 sentences of the one before.
 PART_SIZE = 60
@@ -53,47 +58,52 @@ PART_STEP = 50
 FILL_IF_EMPTY = ["category", "sub_category", "price_range", "area_description", "opening_hours",
                  "speaker_opinion", "notes"]
 COMBINE = ["place_name_alt", "menu_items", "area"]
+# A "name" that is only @accounts or #hashtags: the prompt forbids it; the code catches slips.
+TAG_ONLY = re.compile(r"(?:[@#]\S+\s*)+")
 
 AREAS = load_areas()
 DISTRICTS = [a["district"] for a in AREAS]
 
-SYSTEM = f"""You extract place information from the transcript of a short video about places in Phnom Penh.
-The transcript mixes Khmer and English and comes from speech recognition, so names may be misspelled.
+SYSTEM = f"""You extract place information from a short video about places in Phnom Penh. You get two sources:
+- TRANSCRIPT: what is said. It mixes Khmer and English and comes from speech recognition, so names may be misheard or misspelled.
+- TIKTOK CAPTION, between <caption> and </caption>: what the creator wrote under the video, when there is one. It is typed, so names are usually spelled right. It may also have hashtags, @accounts, emojis and sponsor text. It has no segment ids.
 
 GENERAL RULES:
-- Use ONLY what the transcript says. No outside knowledge, no guessing.
+- Use ONLY what the transcript and the caption say. No outside knowledge, no guessing.
 - If something is not stated, return null for it. Never return "", "N/A" or a guess. Missing values must strictly be null.
-- One record per distinct place. If no place is mentioned, return an empty list.
+- One record per distinct place that the video shows or visits. If no place is named, return an empty list.
+- A place named only in the caption (not said in the video) still gets a record.
 - Copy segment ids exactly as given in the input. Never invent ids or timestamps.
 
 FIELDS (per place):
-- place_name: the name as spoken, in English if an English name is spoken. Put the Khmer name and other spellings in place_name_alt.
-- place_name_alt: list of the Khmer name and other spellings mentioned in the transcript (or empty list []).
+- place_name: the place's English name if one is said or written, otherwise its Khmer name. If the caption writes that name, use the caption's spelling (the transcript may mishear it).
+- place_name_alt: list of every OTHER name for the same place that is said in the transcript or written in the caption: the Khmer name, the English name, and the spoken spelling when it differs from the caption's. Example: caption "Moonlight Noodle House", transcript "Moon Night Noodle House" -> place_name "Moonlight Noodle House", place_name_alt ["Moon Night Noodle House"]. Only names that are actually said or written. Never a hashtag written as one word (like #luvselfiebooth) or an @account. Empty list [] if there are none.
+- name_source: where place_name comes from: "spoken" (said in the video; the caption does not write it), "caption" (written in the caption but not said, or said differently), or "both" (said and written the same way).
 - category: one of {CATEGORIES}.
 - sub_category: a short detail such as "Vietnamese", or null if not stated.
-- price_range: only if a price is stated for THIS place or its items. Write it as spoken, for example "$5-10" or "10,000 riel". Otherwise null.
-- area: list of the districts from {DISTRICTS} that the transcript names for THIS place (also in Khmer, e.g. ចំការមន = Chamkar Mon). A place can have several branches, so list every district named for it. If a neighborhood or other area is named (for example BKK1 or Toul Tom Poung), do NOT put it here. Null if no district is named.
-- area_description: any wording about where the place is (district, neighborhood, street, landmark), as spoken, or null. Fill it even when area is also filled.
-- opening_hours: only if said, as spoken, or null.
-- speaker_opinion: a short summary (1 to 3 sentences) of why a visitor would want to go to THIS place, based ONLY on what the speaker says.
+- price_range: only if a price is stated for THIS place or its items, in the transcript or the caption. Write it as given, for example "$5-10" or "10,000 riel". Otherwise null.
+- area: list of the districts from {DISTRICTS} that the transcript or the caption names for THIS place (also in Khmer, e.g. ចំការមន = Chamkar Mon). A place can have several branches, so list every district named for it. If a neighborhood or other area is named (for example BKK1 or Toul Tom Poung), do NOT put it here. Null if no district is named.
+- area_description: any wording about where the place is (district, neighborhood, street, landmark), as said or written (for example the caption's "📍 Toul Kork"), or null. Fill it even when area is also filled.
+- opening_hours: only if said or written, as given, or null.
+- speaker_opinion: a short summary (1 to 3 sentences) of why a visitor would want to go to THIS place, based ONLY on what the speaker says or the creator writes in the caption.
     Include what is good, special or interesting about the place: taste, price or value, choices, atmosphere, space, seating, photo spots, service, decor, theme or story of the place.
-    Rewrite it in clear, natural words instead of copying the sentence, but keep the real meaning. Do not make it stronger than the speaker said, and do not add praise or facts that were not spoken.
+    Rewrite it in clear, natural words instead of copying the sentence, but keep the real meaning. Do not make it stronger than the speaker said, and do not add praise or facts that were not said or written.
     Leave out the speaker's own story that does not help a visitor (why they came, their trip, greetings, asking viewers to follow).
     Write it in the same language the speaker mainly uses about this place. Do not translate.
-    Null if the speaker says nothing good or interesting about the place.
-- menu_items: list of food and drink items named for this place, as spoken. Null if none.
-- notes: other useful details that fit no field above (for example promos about that place). Do not add details that were not spoken.
-- evidence_text: one short snippet copied EXACTLY from the transcript that proves the place name. Under 200 characters.
-- segment_ids: ids of the segments that talk about this place.
+    Null if nothing good or interesting is said or written about the place.
+- menu_items: list of food and drink items named for this place, in the transcript or the caption. Null if none.
+- notes: other useful details that fit no field above (for example promos about that place). Do not add details that were not said or written.
+- evidence_text: one short snippet copied EXACTLY from the transcript or the caption that proves the place name. Under 200 characters.
+- segment_ids: ids of the transcript segments that talk about this place. Never give an id for something only the caption says. Empty list [] if no segment talks about it (only the caption names it).
 - confidence: for place_name, category, price_range and area, give "high", "medium", "low", or null if the value is null.
-    high = clearly stated; medium = implied or spelling uncertain; low = unclear.
+    high = clearly said or written; medium = implied or spelling uncertain; low = unclear.
 - missing_reasons: for each null field (price_range, area, sub_category, opening_hours, area_description, speaker_opinion, menu_items), provide a short reason such as "not mentioned" or "no price tied to this place".
 
 DO NOT:
+- Make a record for anything the video does not show or visit: sponsors, tagged @accounts, the creator's own channel, delivery apps (e.g. MotoKew, GrabFood), or hashtags of other places or general topics (#phnompenh, #fyp). A hashtag or an @account alone is never a place.
 - Put promotional content (promo codes, subscriptions, delivery offers) into place fields. Mention it in notes only if it is about that place.
-- Treat the creator's channel name or the delivery app (e.g. MotoKew, GrabFood) as a place.
 - Use general price comments that are not tied to one place (for example "you can buy a drink with only 10,000").
-- Fix a spelling by guessing; if a name looks like an ASR error, keep it as spoken and set confidence to "medium" or "low".
+- Fix a spelling by guessing. Only the caption may correct a heard name. If a heard name looks like a speech recognition error and the caption does not name the place, keep it as spoken and set confidence to "medium" or "low".
 """
 
 ConfType = Optional[Literal["high", "medium", "low"]]
@@ -119,6 +129,7 @@ class MissingReasons(BaseModel):
 class PlaceItem(BaseModel):
     place_name: Optional[str] = None
     place_name_alt: List[str] = []
+    name_source: Optional[Literal["spoken", "caption", "both"]] = None
     category: Optional[Literal[tuple(CATEGORIES)]] = None
     sub_category: Optional[str] = None
     price_range: Optional[str] = None
@@ -163,26 +174,60 @@ def windows(segments, size=PART_SIZE, step=PART_STEP):
         i += step
 
 
-def call_model(client, window, models):
-    text = "\n".join(f"[{s['id']}] {s['text']}" for s in window)
+def gemini_input(window: List[dict], caption: Optional[str]) -> str:
+    """What Gemini reads: the numbered transcript part (or "[no speech]"), then the caption if there is one."""
+    if window:
+        text = "Transcript excerpt:\n" + "\n".join(f"[{s['id']}] {s['text']}" for s in window)
+    else:
+        text = f"Transcript: {NO_SPEECH} (nobody speaks in this video)"
+    if caption:
+        text += f"\n\nTikTok caption (written by the creator; it has no segment ids):\n<caption>\n{caption}\n</caption>"
+    return text
+
+
+def call_model(client, window, models, caption=None):
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM,
         response_mime_type="application/json",
         response_schema=ExtractionResponse,
     )
-    resp, model = generate_with_backup(client, models, f"Transcript excerpt:\n{text}", config)
+    resp, model = generate_with_backup(client, models, gemini_input(window, caption), config)
     if resp.parsed is not None:
         return [p.model_dump() for p in resp.parsed.places], model
-    try:
-        return json.loads(resp.text or "").get("places", []), model
-    except (ValueError, AttributeError):
-        raise ClipError(f"{model} did not answer in the expected format. Run the same command again.") from None
+    try:  # the answer only as JSON text: check it against the same format
+        return [p.model_dump() for p in ExtractionResponse.model_validate(json.loads(resp.text or "")).places], model
+    except (ValueError, ValidationError):
+        raise ClipError(f"{model} did not answer in the expected format. Try this clip again.") from None
 
 
-def build_record(p, window):
+def clean_names(values, main: Optional[str]) -> List[str]:
+    """Other names: text only, no #hashtags or @accounts, no repeats and not the main name
+    (compared like stage 5c does, ignoring capitals, spaces and punctuation)."""
+    names, seen = [], {name_key(main)}
+    for v in as_list(values):
+        v = v.strip() if isinstance(v, str) else ""
+        if v and not TAG_ONLY.fullmatch(v) and name_key(v) not in seen:
+            names.append(v)
+            seen.add(name_key(v))
+    return names
+
+
+def place_status(record: dict, score: float, flags: List[str]) -> str:
+    """The usual status, but no real name or a tag-only name is rejected, and a place the transcript doesn't
+    back up (name from the caption, or no valid sentence) is never auto_added: it may be a sponsor."""
+    if "no_place_name" in flags or "name_is_tag" in flags:
+        return "rejected"
+    status = verification_status(record, score)
+    unbacked = "name_from_caption" in flags or not record["segment_ids"]
+    return "needs_review" if status == "auto_added" and unbacked else status
+
+
+def build_record(p, window, caption=None):
     by_id = {s["id"]: s for s in window}
-    seg_ids = [i for i in p.get("segment_ids", []) if i in by_id]
-    window_text = norm(" ".join(s["text"] for s in window))
+    raw_ids = p.get("segment_ids") or []
+    seg_ids = [i for i in raw_ids if i in by_id]
+    spoken = " ".join(s["text"] for s in window)
+    window_text, caption_text = norm(spoken), norm(caption)
     conf = p.get("confidence") or {}
     flags = []
 
@@ -192,11 +237,21 @@ def build_record(p, window):
         flags.append("area_not_in_areas_list")
         area_description = area_description or ", ".join(not_districts)
 
-    if not p.get("place_name"):
+    name = name_key(p.get("place_name"))
+    if not name:
         flags.append("no_place_name")
-    if norm(p.get("evidence_text", "")) not in window_text:
+    elif TAG_ONLY.fullmatch(p["place_name"].strip()):
+        flags.append("name_is_tag")
+    evidence = norm(p.get("evidence_text") or "")
+    if not evidence or (evidence not in window_text and evidence not in caption_text):
         flags.append("evidence_not_found_in_transcript")
-    flags += checked_flags(conf, seg_ids)
+    # With no speech, every name comes from the caption. Otherwise Gemini says so, or the code sees it.
+    if name and (not window or p.get("name_source") == "caption"
+                 or (name not in name_key(spoken) and name in name_key(caption))):
+        flags.append("name_from_caption")
+    # No sentence numbers is fine for a place only the caption names, but not when Gemini gave wrong ones.
+    ids_problem = not seg_ids and (bool(raw_ids) or "name_from_caption" not in flags)
+    flags += checked_flags(conf, ids_problem)
 
     raw_missing = p.get("missing_reasons") or {}
     if hasattr(raw_missing, "model_dump"):
@@ -206,7 +261,7 @@ def build_record(p, window):
     record = {
         "place_id": None,
         "place_name": p.get("place_name"),
-        "place_name_alt": p.get("place_name_alt") or [],
+        "place_name_alt": clean_names(p.get("place_name_alt"), p.get("place_name")),
         "category": p.get("category"),
         "sub_category": p.get("sub_category"),
         "price_range": p.get("price_range"),
@@ -221,7 +276,7 @@ def build_record(p, window):
     record.update({
         "completeness": score,
         "missing_fields": missing_fields,
-        "verification_status": verification_status(record, score),
+        "verification_status": None,
         "cleaned_by": None,
         "cleaner_note": None,
         "notes": p.get("notes"),
@@ -231,13 +286,14 @@ def build_record(p, window):
         "segment_ids": seg_ids,
         "flags": flags,
     })
+    record["verification_status"] = place_status(record, score, flags)
     return record
 
 
-def checked_flags(conf: dict, seg_ids: List[int]) -> List[str]:
+def checked_flags(conf: dict, ids_problem: bool) -> List[str]:
     """Flags that depend on the sentence numbers and Gemini's confidence."""
     flags = []
-    if not seg_ids:
+    if ids_problem:
         flags.append("no_valid_segment_ids")
     if conf.get("place_name") in ["medium", "low"]:
         flags.append("asr_spelling_or_uncertain_name")
@@ -254,6 +310,7 @@ def merge_record(first: dict, later: dict) -> None:
         if key == "area" and not first.get("area") and combined:
             first["confidence"]["area"] = later["confidence"].get("area")
         first[key] = combined if combined or key == "place_name_alt" else None
+    first["place_name_alt"] = clean_names(first["place_name_alt"], first.get("place_name"))
     for key in FILL_IF_EMPTY:
         if not first.get(key) and later.get(key):
             first[key] = later[key]
@@ -262,15 +319,19 @@ def merge_record(first: dict, later: dict) -> None:
     first["segment_ids"] = sorted(set(first["segment_ids"]) | set(later["segment_ids"]))
     first["missing_reasons"] = {k: v for k, v in first["missing_reasons"].items() if not first.get(k)}
 
-    # evidence_text is still the first part's, so its check stays; an area problem from either part stays.
-    flags = [f for f in first["flags"] if f in ("no_place_name", "evidence_not_found_in_transcript")]
+    # Name and evidence_text are the first part's, so their checks stay; so does an area problem from either part.
+    flags = [f for f in first["flags"] if f in ("no_place_name", "name_is_tag", "evidence_not_found_in_transcript")]
     if "area_not_in_areas_list" in first["flags"] + later["flags"]:
         flags.append("area_not_in_areas_list")
-    first["flags"] = flags + checked_flags(first["confidence"], first["segment_ids"])
+    # Spoken in any part = not only from the caption.
+    if "name_from_caption" in first["flags"] and "name_from_caption" in later["flags"]:
+        flags.append("name_from_caption")
+    ids_problem = not first["segment_ids"] and "no_valid_segment_ids" in first["flags"] + later["flags"]
+    first["flags"] = flags + checked_flags(first["confidence"], ids_problem)
 
     score, missing_fields = completeness(first)
     first.update(completeness=score, missing_fields=missing_fields,
-                 verification_status=verification_status(first, score))
+                 verification_status=place_status(first, score, first["flags"]))
 
 
 def extract_clip(client, path: Path, models: List[str], force: bool, answers_dir: Path = GEMINI_ANSWERS_DIR) -> str:
@@ -289,22 +350,36 @@ def extract_clip(client, path: Path, models: List[str], force: bool, answers_dir
     transcript = (clip.get("stt") or {}).get("transcript")
     if not transcript:
         raise ClipError(f"No transcript yet. Run stage 3 first: python stage3_transcribe.py {display_path(path)}")
+    source = clip.get("source") or {}
+    if source.get("caption", "") == "":
+        raise ClipError("The TikTok caption hasn't been read yet. Run stage 2 (it reads the caption only, no download): "
+                        f"python stage2_get_audio.py {display_path(path)}\n"
+                        "  If the video is gone, write null in source.caption.")
+    caption = source["caption"].strip() if isinstance(source["caption"], str) else ""
     if transcript.strip() == NO_SPEECH:
-        print(f"{clip_id}: no speech in this video, so no places to find. Skipped.")
-        return "skipped"
+        if not caption:
+            print(f"{clip_id}: no speech and no caption, so no places to find. Skipped.")
+            return "skipped"
+        parts = [[]]
+        print(f"{clip_id}: no speech; finding places in the TikTok caption with {models[0]} ...", flush=True)
+    else:
+        segments = split_transcript(transcript)
+        parts = list(windows(segments))
+        print(f"{clip_id}: finding places in {len(segments)} sentences{' and the caption' if caption else ''} "
+              f"with {models[0]} ...", flush=True)
 
-    segments = split_transcript(transcript)
-    print(f"{clip_id}: finding places in {len(segments)} sentences with {models[0]} ...", flush=True)
     records, seen_places, used_models = [], {}, set()
-    for window in windows(segments):
-        places, used_model = call_model(client, window, models)
+    for window in parts:
+        places, used_model = call_model(client, window, models, caption)
         used_models.add(used_model)
         for p in places:
-            key = norm(p.get("place_name") or "")
+            key = name_key(p.get("place_name"))
+            if key and TAG_ONLY.fullmatch(p["place_name"].strip()):
+                key = "tag:" + key  # never joined to the real place, so its name can't be lost
             if key and key in seen_places:
-                merge_record(seen_places[key], build_record(p, window))
+                merge_record(seen_places[key], build_record(p, window, caption))
                 continue
-            rec = build_record(p, window)
+            rec = build_record(p, window, caption)
             records.append(rec)
             if key:
                 seen_places[key] = rec
@@ -329,7 +404,11 @@ def extract_clip(client, path: Path, models: List[str], force: bool, answers_dir
 
     print(f"{clip_id}: {len(records)} place{'' if len(records) == 1 else 's'} found ({extraction['model']})")
     for r in records:
-        print(f"  - {r['place_name'] or '(no name)'} ({r['category'] or 'no category'}): {r['verification_status']}")
+        also = f"; also called {', '.join(r['place_name_alt'])}" if r["place_name_alt"] else ""
+        source = (", only a tag, not a place name" if "name_is_tag" in r["flags"]
+                  else ", name from caption" if "name_from_caption" in r["flags"] else "")
+        print(f"  - {r['place_name'] or '(no name)'} ({r['category'] or 'no category'}): "
+              f"{r['verification_status']}{source}{also}")
     return "made"
 
 

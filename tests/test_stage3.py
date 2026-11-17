@@ -174,7 +174,8 @@ reset(plan={"gemini-3.8-flash": [BUSY()] * 3, "gemini-3.6-flash": [BUSY()] * 3})
 code, out = run(p6)
 check("6 all busy: 6 tries, waits 10/30/10/30, clip unchanged, says run again later",
       code == 1 and len(FAKE.models.calls) == 6 and SLEEPS == [10, 30, 10, 30] and p6.read_bytes() == raw
-      and "Gemini is busy (tried gemini-3.8-flash, gemini-3.6-flash). Run the same command again later" in out, out)
+      and "Gemini is busy (tried gemini-3.8-flash, gemini-3.6-flash). Try this clip again later." in out
+      and "To try only the failed clip again: python stage3_transcribe.py" in out, out)
 show("every model busy", out)
 
 # 7. timeout / no answer -> retried like busy
@@ -259,7 +260,9 @@ reset()
 code, out = run(clip("PP-017"), clip("PP-018", audio_file=None))
 check("13 several: summary, exit 1, Next lists only the OK clip",
       code == 1 and "Done: 1 made, 0 skipped, 1 failed (PP-018)" in out
-      and "PP-017.json" in out.split("Next:")[-1] and "PP-018" not in out.split("Next:")[-1], out)
+      and "PP-017.json" in out.split("Next:")[-1].splitlines()[0] and "PP-018" not in out.split("Next:")[-1].splitlines()[0], out)
+check("13 retry line: only the failed clip", "To try only the failed clip again: python " in out
+      and "PP-018.json" in out.split("To try only")[-1] and "PP-017" not in out.split("To try only")[-1], out)
 
 # 14. broken / missing clip file
 bad = CLIPS / "PP-019.json"

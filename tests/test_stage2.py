@@ -167,7 +167,9 @@ pa, pb = clip("PP-012"), clip("PP-013", url=None)
 code, out = run(pa, pb)
 check("12 several: summary, exit 1, Next lists only the OK clip",
       code == 1 and "Done: 1 made, 0 skipped, 1 failed (PP-013)" in out
-      and "PP-012.json" in out.split("Next:")[-1] and "PP-013" not in out.split("Next:")[-1], out)
+      and "PP-012.json" in out.split("Next:")[-1].splitlines()[0] and "PP-013" not in out.split("Next:")[-1].splitlines()[0], out)
+check("12 retry line: only the failed clip", "To try only the failed clip again: python " in out
+      and "PP-013.json" in out.split("To try only")[-1] and "PP-012" not in out.split("To try only")[-1], out)
 print("----- output of two clips, one failing -----\n" + out + "--------------------------------------------")
 
 # 13. audio_file set but WAV missing (teammate pulled the clip, WAVs are not in git)

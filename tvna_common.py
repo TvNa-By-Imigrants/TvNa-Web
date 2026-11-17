@@ -3,6 +3,7 @@ import difflib
 import http.client
 import json
 import re
+import shlex
 import sys
 import time
 import unicodedata
@@ -76,10 +77,18 @@ class ClipError(Exception):
     """This clip can't be done. The message says why; the clip file is not changed."""
 
 
+def retry_command(failed: List[Path], clip_paths: List[Path]) -> str:
+    """The command that was run, with only the clips that failed. Options such as --force are kept."""
+    given = set(clip_paths)
+    options = [a for a in sys.argv[1:] if Path(a) not in given]
+    words = [sys.argv[0], *(display_path(p) for p in failed), *options]
+    return "python " + " ".join(shlex.quote(w) for w in words)
+
+
 def run_each(clip_paths: List[Path], work: Callable[[Path], str], next_command: str) -> None:
     """Run work() on each clip; it returns "made" or "skipped", or raises ClipError.
-    One failing clip doesn't stop the others. Prints a summary and the next command ("{clips}" becomes
-    the clips that worked); exits 1 if any failed."""
+    One failing clip doesn't stop the others. Prints a summary, the next command ("{clips}" becomes
+    the clips that worked) and the command to try only the failed clips again; exits 1 if any failed."""
     ok, failed, counts = [], [], {"made": 0, "skipped": 0}
     for path in clip_paths:
         try:
@@ -87,14 +96,15 @@ def run_each(clip_paths: List[Path], work: Callable[[Path], str], next_command: 
             ok.append(display_path(path))
         except ClipError as e:
             print(f"{path.stem}: {e}\n  Nothing changed in {display_path(path)}.")
-            failed.append(path.stem)
+            failed.append(path)
 
     if len(clip_paths) > 1:
         print(f"Done: {counts['made']} made, {counts['skipped']} skipped, {len(failed)} failed"
-              + (f" ({', '.join(failed)})" if failed else ""))
+              + (f" ({', '.join(p.stem for p in failed)})" if failed else ""))
     if ok:
         print(f"Next: {next_command.format(clips=' '.join(ok))}")
     if failed:
+        print(f"To try only the failed clip{'s' if len(failed) > 1 else ''} again: {retry_command(failed, clip_paths)}")
         sys.exit(1)
 
 
@@ -288,5 +298,4 @@ def generate_with_backup(client, models: List[str], contents, config=None):
                 time.sleep(wait)
             else:
                 print(f"  {model} is still {reason}.", flush=True)
-    raise ClipError(f"Gemini is busy (tried {', '.join(models)}). Run the same command again later: "
-                    "clips that are already done are skipped.")
+    raise ClipError(f"Gemini is busy (tried {', '.join(models)}). Try this clip again later.")

@@ -26,7 +26,7 @@ _Last updated: 2026-11-17_
 | 1. Collect | Paste a TikTok link → new clip file | `stage1_new_clip.py` | ✅ Built and tested |
 | 2. Video → audio | Download the video → 16 kHz mono WAV | `stage2_get_audio.py` | ✅ Built and tested |
 | 3. Audio → transcript | Gemini writes the Khmer + English transcript | `stage3_transcribe.py` | ✅ Built and tested |
-| 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built and tested (Phnom Penh check planned) |
+| 4. Transcript → places | Gemini finds each place from the transcript and the TikTok caption | `stage4_extract_places.py` | ✅ Built and tested (Phnom Penh check planned) |
 | 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built and tested |
 | 5b. Team review | People check and fill missing fields | by hand + `stage5b_validate_clips.py` | ⏳ Validator planned |
 | 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built and tested |
@@ -50,7 +50,7 @@ _Last updated: 2026-11-17_
 - Stages 3 and 4 get the known names and the TikTok caption as hints.
 - The first ~10 clips the team approves become a test set. A change to the prompt or model stays only if the score goes up.
 
-Steps: 1. keep Gemini's first answer ✅ · 2. the TikTok caption (saved by stage 2 ✅ · used by stage 4, which keeps the caption's name and the spoken name · one name on the website) · 3. save the team's fixes · 4. hints for Gemini · 5. test score
+Steps: 1. keep Gemini's first answer ✅ · 2. the TikTok caption (saved by stage 2 ✅ · used by stage 4, which keeps the caption's name and the spoken name ✅ · one name on the website) · 3. save the team's fixes · 4. hints for Gemini · 5. test score
 
 ---
 
@@ -115,7 +115,7 @@ git pull                                                  # get the team's lates
 python stage1_new_clip.py "<TikTok link>"                 # 1. ✅ new clip file: data/clips/PP-NNN.json
 python stage2_get_audio.py data/clips/PP-NNN.json         # 2. ✅ audio: data/audio/PP-NNN.wav
 python stage3_transcribe.py data/clips/PP-NNN.json        # 3. ✅ transcript, saved in the clip's stt
-python stage4_extract_places.py data/clips/PP-NNN.json    # 4. ✅ places, from the transcript
+python stage4_extract_places.py data/clips/PP-NNN.json    # 4. ✅ places, from the transcript and the caption
 ```
 
 Replace `PP-NNN` with the number stage 1 printed. Stages 2–4 also take several clips at once; one failing doesn't stop the others. Add `--force` to redo a clip. Stages 3 and 4 never redo a clip the team already reviewed, even with `--force`.
@@ -160,7 +160,7 @@ TvNa-Web/
 │   ├── places.json                ← made by stage 5c
 │   └── final_dataset.json         ← made by stage 6
 ├── templates/                     ← empty JSON templates for every file type
-├── docs/                          ← field guide and diagrams
+├── docs/                          ← field guide, decisions, diagrams
 └── tests/                         ← offline checks: python tests/run_all.py (no Gemini, no internet)
 ```
 
@@ -256,7 +256,7 @@ PP-002: saved transcript (37 lines, gemini-3.6-flash)
 Next: python stage4_extract_places.py data/clips/PP-002.json
 ```
 
-If it ends with `Gemini is busy … Run the same command again later`, do that. Clips that already have a transcript are skipped.
+If a clip ends with `Gemini is busy … Try this clip again later`, wait a while, then run the `To try only the failed clips again: …` command printed at the end. It has only the clips that failed, so the others are not redone (even with `--force`).
 
 A video with only music (nobody speaks) gets the transcript `[no speech]`. Song lyrics are not written down.
 
@@ -279,7 +279,15 @@ With `--force`, the clip's old places are cleared too (they point to sentences o
 python stage4_extract_places.py data/clips/PP-002.json
 ```
 
-Gemini reads the transcript and lists each place with what was said about it (category, menu, opinion …). The code then checks the district against `data/areas.json` and gives each place a status: `auto_added`, `needs_review` or `rejected`. Same busy handling as stage 3 (`gemini-3.6-flash`, backup `gemini-3.8-flash`). A `[no speech]` clip is skipped.
+Gemini reads the transcript **and the TikTok caption** and lists each place with what was said about it (category, menu, opinion …). The code then checks the district against `data/areas.json` and gives each place a status: `auto_added`, `needs_review` or `rejected`. Same busy handling as stage 3 (`gemini-3.6-flash`, backup `gemini-3.8-flash`).
+
+**Names (prompt v5):** the caption is typed by the creator, so its spelling is usually right; the transcript may mishear a name.
+
+- `place_name` = the English name if there is one, in the caption's spelling when the caption writes it, otherwise the spoken name.
+- `place_name_alt` = every other name said or written, including the heard spelling ("ALWAYS selfie booth" when the caption says "Luv selfie booth"). No name is lost; the team picks the right one in 5b.
+- A place named only in the caption still counts. It gets the flag `name_from_caption`, so the team checks it is the place shown and not a sponsor. A place the transcript doesn't back up is never `auto_added`.
+- Sponsors, @accounts and hashtags like #phnompenh are not places. If Gemini still gives a "name" that is only a tag, the place is kept but `rejected` (flag `name_is_tag`), and the output says so.
+- A `[no speech]` (music only) clip is read from its caption. With no caption either, it is skipped.
 
 A copy of Gemini's answer is also saved in `data/gemini_answers/PP-002.json`. **Never edit it:** after the team review, it shows what Gemini got wrong (for the improvement loop).
 
@@ -288,13 +296,13 @@ Gemini reads up to 60 sentences at once, so a normal TikTok is read whole. A lon
 You'll see:
 
 ```
-PP-002: finding places in 33 sentences with gemini-3.6-flash ...
+PP-002: finding places in 33 sentences and the caption with gemini-3.6-flash ...
 PP-002: 1 place found (gemini-3.6-flash)
-  - Hanjang Coffee & Eatery (restaurant): needs_review
+  - Hanjan Coffee (restaurant): needs_review, name from caption; also called Hanjang Coffee & Eatery
 Next: python stage5a_dedupe_clips.py data/clips/*.json
 ```
 
-`needs_review` here because no district was named. The team fills it in stage 5b.
+The caption's "Hanjan Coffee" is the name; the spoken "Hanjang Coffee & Eatery" is kept as another name. (PP-003 the same way: "Luv selfie booth", also called "ALWAYS selfie booth".) `needs_review` here because no district was named. The team fills it, and picks the right name, in stage 5b.
 
 A clip the team already reviewed (a name in `cleaned_by`, or status `verified`) is never redone, even with `--force`, so their fixes are kept.
 
@@ -305,6 +313,8 @@ A clip the team already reviewed (a name in `cleaned_by`, or status `verified`) 
 | Your clip from stage 3 | `… place(s) found`, one line per place. Open the clip: each place is in `fields` |
 | The same command again | `already has places. Skipped.` |
 | A clip with no transcript | `No transcript yet. Run stage 3 first` |
+| A `[no speech]` clip with a caption | `no speech; finding places in the TikTok caption …` |
+| Open the clip | a place named in the caption has the caption's spelling in `place_name`, other names in `place_name_alt` |
 | Write your name in a place's `cleaned_by`, then run with `--force` | `1 place was reviewed by the team. Skipped, so their fixes are kept.` |
 
 ---
@@ -373,5 +383,6 @@ Built and tested. The commands are in [How to run](#how-to-run).
 ## More detail
 
 - [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md) explains every field, who fills it, and the value rules. Note: the guide still uses the old script names (for example `extract_places_gemini.py`, now `stage4_extract_places.py`), and its section 8 still says "exact match only" (see Stage 5c above). It will be updated.
+- [`docs/decisions.md`](docs/decisions.md) lists key decisions and why.
 - [`docs/tvna_data_model.png`](docs/tvna_data_model.png) shows how the JSON files connect.
 - [`docs/tvna_pipeline_overview.png`](docs/tvna_pipeline_overview.png) shows the stages at a glance.
