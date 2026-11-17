@@ -22,6 +22,7 @@ from tvna_common import (
     display_path,
     gemini_client,
     generate_with_backup,
+    has_places,
     load_json,
     models_in_order,
     run_each,
@@ -117,10 +118,9 @@ def transcribe_clip(client, clip_path: Path, audio_dir: Path, models: list, forc
 
     clip["stt"] = {"tool": "gemini", "model": model, "settings": SETTINGS, "transcript": text}
     # Old places point to sentence numbers of the old transcript, so stage 4 must find them again.
-    had_places = clip.get("fields") is not None
-    if had_places:
-        clip["extraction"] = None
-        clip["fields"] = None
+    had_places = has_places(clip)
+    clip["extraction"] = None
+    clip["fields"] = None
     save_json(clip_path, clip)
     if had_places:
         print(f"{clip_id}: old places cleared (they came from the old transcript). Stage 4 will find them again.")

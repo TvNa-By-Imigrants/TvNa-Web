@@ -19,7 +19,7 @@ Each video becomes one clip file (`data/clips/PP-001.json`). Every stage is a sm
 
 ## Where we are now
 
-_Last updated: 2026-11-16_
+_Last updated: 2026-11-17_
 
 | Stage | What it does | Script | Status |
 |---|---|---|---|
@@ -27,17 +27,20 @@ _Last updated: 2026-11-16_
 | 2. Video → audio | Download the video → 16 kHz mono WAV | `stage2_get_audio.py` | ✅ Built and tested |
 | 3. Audio → transcript | Gemini writes the Khmer + English transcript | `stage3_transcribe.py` | ✅ Built and tested |
 | 4. Transcript → places | Gemini finds each place and what was said about it | `stage4_extract_places.py` | ✅ Built and tested (Phnom Penh check planned) |
-| 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built |
+| 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built and tested |
 | 5b. Team review | People check and fill missing fields | by hand + `stage5b_validate_clips.py` | ⏳ Validator planned |
 | 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built and tested |
-| 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built |
+| 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built and tested |
 
 **Coming next, in order:**
-1. **Next milestone: the improvement loop** (below)
-2. Automatic tests: the offline checks are in `tests/`; next, run them with `python -m unittest`
-3. The clip validator
-4. The Phnom Penh check in stage 4
-5. Next milestone: save each video's view/like/comment/share counts (stage 2), to help rank places
+1. **Now: the improvement loop** (below)
+2. The clip validator
+3. The Phnom Penh check in stage 4
+
+**Next milestone (noted, not built yet):**
+- Save each video's view/like/comment/share counts (stage 2), to help rank places
+- Every plan follows one real clip through all stages: what goes in, what comes out, what gets removed
+- GitHub runs `python tests/run_all.py` on every push (CI), with no new packages. CI is changed only with the team's OK
 
 **The improvement loop.** Gemini forgets everything after each run, so we save the team's fixes and give them back to it:
 
@@ -128,7 +131,13 @@ python stage6_build_final_dataset.py data/clips/*.json    # 6.  ✅ build data/f
 
 Each stage has its own section below with what it does and a "Test it yourself" table.
 
-**After changing a script:** run its offline checks, e.g. `python tests/test_stage4.py`. They use fake Gemini and fake TikTok, cost nothing and never touch `data/`. Each prints `N/N passed`.
+**Before every push:** run all offline checks:
+
+```sh
+python tests/run_all.py        # Total: N/N passed (stops with an error if any check fails)
+```
+
+They use fake Gemini, fake TikTok and fake Maps links, cost nothing and never touch `data/`. One stage only: `python tests/test_stage4.py`. Every stage is also checked to **run twice safely**: the second run changes no file and doesn't call TikTok or Gemini (one exception: stage 1 with a short `vt.tiktok.com` link asks TikTok which video it is, then says `Duplicate`).
 
 ---
 
@@ -152,7 +161,7 @@ TvNa-Web/
 │   └── final_dataset.json         ← made by stage 6
 ├── templates/                     ← empty JSON templates for every file type
 ├── docs/                          ← field guide and diagrams
-└── tests/                         ← offline checks: python tests/test_stage4.py (no Gemini, no internet)
+└── tests/                         ← offline checks: python tests/run_all.py (no Gemini, no internet)
 ```
 
 ---
@@ -203,7 +212,7 @@ PP-002: saved data/audio/PP-002.wav (16 kHz, mono, 73.3 s)
 Next: python stage3_transcribe.py data/clips/PP-002.json
 ```
 
-The caption often has the place name written correctly, so stages 3 and 4 will use it. A clip that already has its WAV but no caption (made before captions were added) gets the caption only, with no download:
+The caption often has the place name written correctly, so stage 4 will use it (stage 3 stays audio only, so the spoken name is kept too). A clip that already has its WAV but no caption (made before captions were added) gets the caption only, with no download:
 
 ```
 PP-003: already has audio; reading the caption from TikTok (no download) ...
@@ -339,13 +348,16 @@ Next: python stage6_build_final_dataset.py data/clips/*.json
 | A clip with a slightly different spelling of a known place | `matched … (fuzzy 9N% like "…")` |
 | "Luv selfie booth" when "ALWAYS selfie booth" is known | `unclear … maybe tvna_p_0002 "ALWAYS selfie booth" (77%)` |
 | Write that `place_id` in the clip, run again | `set by the team; new aliases: Luv selfie booth` |
-| The same command again | nothing new; places with a `place_id` are skipped |
+| The same command again | nothing new; places with a `place_id` are skipped, and their Maps links aren't read again |
 
 ---
 
 ## Stages 5a and 6
 
-Built. The commands are in [How to run](#how-to-run).
+Built and tested. The commands are in [How to run](#how-to-run).
+
+- **5a** again moves nothing. A clip file that is gone (already moved) is listed under `problems`, not an error.
+- **6** rebuilds `data/final_dataset.json` from scratch each time, so the same clips give the same file. Empty text (`""`) is written as `null`.
 
 ---
 

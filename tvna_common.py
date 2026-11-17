@@ -1,5 +1,6 @@
 """Shared helpers for the TVNA pipeline scripts (see docs/tvna_field_guide.md)."""
 import difflib
+import http.client
 import json
 import re
 import sys
@@ -145,6 +146,11 @@ def verification_status(place: dict, score: float) -> str:
     return "auto_added"
 
 
+def has_places(clip: dict) -> bool:
+    """Stage 4 has run on this clip ([] = it ran and found no place). null, "" or a missing key = not yet."""
+    return isinstance(clip.get("fields"), list)
+
+
 def reviewed_places(clip: dict) -> List[dict]:
     """Places the team checked in stage 5b: a name in cleaned_by, or status verified."""
     return [p for p in clip.get("fields") or []
@@ -193,6 +199,8 @@ def follow_redirects(url: str, wanted: re.Pattern, site: str, thing: str) -> str
             current = urljoin(current, location)
         except urllib.error.URLError as e:
             raise ValueError(f"no connection ({e.reason})") from None
+        except (OSError, http.client.HTTPException) as e:  # e.g. a timeout while reading the answer
+            raise ValueError(f"no connection ({type(e).__name__})") from None
         if wanted.search(current):
             return current
     raise ValueError(f"too many redirects, no {thing} link found")

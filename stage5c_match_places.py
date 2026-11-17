@@ -40,7 +40,8 @@ MAX_SUGGESTIONS = 3
 
 
 class MapsLinks:
-    """Place codes of Google Maps links. Each link is read once per run; problems are kept for the report."""
+    """Place codes of Google Maps links. Each link is read once per run, and only when a clip place needs
+    comparing, so a run where every place already has a place_id reads none. Problems are kept for the report."""
 
     def __init__(self):
         self.keys: Dict[str, Optional[str]] = {}
@@ -57,13 +58,17 @@ class MapsLinks:
                 self.keys[url] = None
         return self.keys[url]
 
+    def places_with(self, link: str, by_id: Dict[str, dict]) -> List[str]:
+        """place_ids in places.json whose Maps link has this place code."""
+        return sorted(pid for pid, e in by_id.items() if self.key(e.get("google_maps_url")) == link)
+
 
 def name_keys(names) -> Set[str]:
     return {name_key(n) for n in names if name_key(n)}
 
 
 def entry_names(entry: dict) -> List[str]:
-    return [entry["place_name"], *entry["aliases"]]
+    return [entry["place_name"], *as_list(entry.get("aliases"))]
 
 
 def next_place_id(places):
@@ -73,6 +78,7 @@ def next_place_id(places):
 
 
 def add_aliases(entry, names):
+    entry["aliases"] = as_list(entry.get("aliases"))
     known = name_keys(entry["aliases"])
     added = []
     for name in names:
@@ -131,11 +137,11 @@ def describe(candidates) -> str:
                      for score, inside, _, pid, name in candidates[:MAX_SUGGESTIONS])
 
 
-def find_match(place, names, name_index, link_index, by_id, links) -> Tuple[str, Optional[str], str]:
+def find_match(place, names, name_index, by_id, links) -> Tuple[str, Optional[str], str]:
     """Returns (group, place_id, note); group is "matched", "unclear" or "new"."""
     link = links.key(place.get("google_maps_url"))
-    if link and link_index.get(link):
-        ids = sorted(link_index[link])
+    ids = links.places_with(link, by_id) if link else []
+    if ids:
         if len(ids) == 1:
             return "matched", ids[0], "same Google Maps link"
         return "unclear", None, f"same Google Maps link as {', '.join(ids)}"
@@ -144,8 +150,8 @@ def find_match(place, names, name_index, link_index, by_id, links) -> Tuple[str,
     if len(ids) > 1:
         return "unclear", None, f"candidates {', '.join(ids)}"
     if ids:
-        other = links.key(by_id[ids[0]].get("google_maps_url"))
-        if link and other and link != other:
+        other = links.key(by_id[ids[0]].get("google_maps_url")) if link else None
+        if other and link != other:
             return "unclear", None, (f"same name as {ids[0]}, but a different Google Maps link: another branch "
                                      f"(write {ids[0]}) or a different place (write \"{NEW}\")?")
         return "matched", ids[0], ""
@@ -175,27 +181,24 @@ def main():
     by_id = {e["place_id"]: e for e in places}
     links = MapsLinks()
     name_index: Dict[str, Set[str]] = {}
-    link_index: Dict[str, Set[str]] = {}
 
     def index(entry):
         for key in name_keys(entry_names(entry)):
             name_index.setdefault(key, set()).add(entry["place_id"])
-        link = links.key(entry.get("google_maps_url"))
-        if link:
-            link_index.setdefault(link, set()).add(entry["place_id"])
 
     for entry in places:
         index(entry)
     report = {"matched": [], "new": [], "unclear": [], "unknown_id": []}
     skipped = 0
     places_changed = not places_path.exists()
+    changed_clips = []
 
     for path in args.clips:
         clip = load_json(path)
         clip_changed = False
         for f in clip.get("fields") or []:
             label = f'{Path(path).name}  "{f.get("place_name")}"'
-            names = [f.get("place_name"), *(f.get("place_name_alt") or [])]
+            names = [f.get("place_name"), *as_list(f.get("place_name_alt"))]
             set_by_team = f.get("place_id")
             if set_by_team and set_by_team != NEW:
                 if set_by_team not in by_id:
@@ -216,14 +219,14 @@ def main():
             if set_by_team == NEW:
                 group, place_id, why = "new", None, "the team said: a different place"
             else:
-                group, place_id, why = find_match(f, names, name_index, link_index, by_id, links)
+                group, place_id, why = find_match(f, names, name_index, by_id, links)
             if group == "unclear":
                 report["unclear"].append(f"{label} -> {why} (left null)")
                 continue
             if group == "new":
                 place_id = next_place_id(places)
                 entry = {"place_id": place_id, "place_name": f["place_name"], "aliases": [], "area": [],
-                         "google_maps_url": f.get("google_maps_url")}
+                         "google_maps_url": f.get("google_maps_url") or None}
                 places.append(entry)
                 by_id[place_id] = entry
             notes = ([why] if why else []) + remember(by_id[place_id], f, names, areas)
@@ -235,10 +238,14 @@ def main():
             clip_changed = places_changed = True
 
         if clip_changed:
-            save_json(path, clip)
+            changed_clips.append((path, clip))
 
+    # Nothing is written until every clip is done, and places.json first: a clip must never get a place_id
+    # that places.json doesn't have (e.g. after Ctrl-C).
     if places_changed:
         save_json(places_path, places)
+    for path, clip in changed_clips:
+        save_json(path, clip)
 
     for group, lines in report.items():
         print(f"{group} ({len(lines)}):")

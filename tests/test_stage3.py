@@ -298,6 +298,16 @@ reset()
 code, out = run(p, "--force")
 check("16c no places yet + --force: no 'cleared' message", code == 0 and "cleared" not in out, out)
 
+p16e = with_places("PP-023")
+c = load(p16e)
+c["fields"] = ""
+p16e.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+reset()
+code, out = run(p16e, "--force")
+c = load(p16e)
+check('16e fields "" with an old extraction + --force: old extraction cleared too',
+      code == 0 and c["fields"] is None and c["extraction"] is None, c)
+
 p16d = with_places("PP-023")
 p16e = with_places("PP-024", cleaned_by="Sok", verification_status="rejected")
 reset()
@@ -312,6 +322,40 @@ def no_key(**kw):
 s3.gemini_client = no_key
 code, out = run(clip("PP-020"))
 check("15 no API key: clear message", code == 1 and "GEMINI_API_KEY is missing" in out, out)
+
+# R. run it twice: every kind of value -> the 2nd run changes nothing and doesn't call Gemini
+s3.gemini_client = fake_client  # test 'no API key' above swapped it out
+MISSING = object()
+STT = {"tool": "gemini", "model": "gemini-3.8-flash", "settings": "km+en code-switching prompt v1"}
+for i, (kind, stt, cleaned_by) in enumerate([
+        ("transcript filled", dict(STT, transcript="old line"), MISSING),
+        ("transcript null", dict(STT, transcript=None), MISSING),
+        ('transcript ""', dict(STT, transcript=""), MISSING),
+        ("stt null", None, MISSING),
+        ("stt missing", MISSING, MISSING),
+        ('cleaned_by "" (not reviewed)', dict(STT, transcript=None), ""),
+        ("cleaned_by null", dict(STT, transcript=None), None)]):
+    name = f"PP-1{i:02d}"
+    make_wav(f"{name}.wav")
+    p = clip(name)
+    c = load(p)
+    if stt is MISSING:
+        del c["stt"]
+    else:
+        c["stt"] = stt
+    if cleaned_by is not MISSING:
+        c["fields"] = [{"place_name": "Tea Kingdom", "verification_status": "needs_review", "cleaned_by": cleaned_by}]
+    p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+    reset()
+    code, out = run(p)
+    first_calls = len(FAKE.models.calls)
+    raw = p.read_bytes()
+    reset()
+    code, out = run(p)
+    check(f"R {kind}: 1st run {'skipped' if kind == 'transcript filled' else 'transcribed'}; "
+          "2nd run skipped, no Gemini call, file unchanged",
+          first_calls == (0 if kind == "transcript filled" else 1) and code == 0 and "Skipped" in out
+          and not FAKE.models.calls and p.read_bytes() == raw, out)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

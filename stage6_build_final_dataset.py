@@ -2,7 +2,8 @@
 """Stage 6: build the final dataset for the website, one record per place.
 Joins the clip files to places.json by place_id. Run after stage5c_match_places.py.
 Values that can differ between clips (category, price_range, opening_hours,
-area_description, menu_items) are kept as lists of unique values.
+area_description, menu_items) are kept as lists of unique values. An empty Maps link, opinion or
+creator ("") is written as null.
 
 Usage:
     python stage6_build_final_dataset.py data/clips/*.json   # -> data/final_dataset.json
@@ -10,7 +11,17 @@ Usage:
 import argparse
 from pathlib import Path
 
-from tvna_common import AREAS_FILE, DATA_DIR, PLACES_FILE, load_areas, load_json, match_districts, norm, save_json
+from tvna_common import (
+    AREAS_FILE,
+    DATA_DIR,
+    PLACES_FILE,
+    as_list,
+    load_areas,
+    load_json,
+    match_districts,
+    norm,
+    save_json,
+)
 
 LIST_FIELDS = ["category", "price_range", "area", "area_description", "opening_hours", "menu_items"]
 CHECK_FIELDS = ["category", "price_range", "opening_hours"]
@@ -23,15 +34,16 @@ def add_unique(values, new):
 
 
 def new_record(place):
+    main_name = norm(place["place_name"])
     rec = {
         "place_id": place["place_id"],
         "place_name": place["place_name"],
-        "place_name_alt": [a for a in place.get("aliases", []) if norm(a) != norm(place["place_name"])],
+        "place_name_alt": [a for a in as_list(place.get("aliases")) if norm(a) and norm(a) != main_name],
         "category": [],
         "price_range": [],
         "area": [],
         "area_description": [],
-        "google_maps_url": place.get("google_maps_url"),
+        "google_maps_url": place.get("google_maps_url") or None,
         "opening_hours": [],
         "menu_items": [],
         "popularity": 0,
@@ -56,8 +68,10 @@ def main():
     for path in args.clips:
         clip = load_json(path)
         name = Path(path).name
+        clip_id = clip.get("clip_id") or Path(path).stem
         source = clip.get("source") or {}
-        if not source.get("creator"):
+        creator = (source.get("creator") or "").strip() or None
+        if not creator:
             warnings.append(f"{name}: no creator, so this clip is not counted in popularity")
 
         for f in clip.get("fields") or []:
@@ -74,16 +88,16 @@ def main():
             for key in LIST_FIELDS:
                 add_unique(rec[key], f.get(key))
 
-            mention = next((m for m in rec["mentions"] if m["clip_id"] == clip.get("clip_id")), None)
+            mention = next((m for m in rec["mentions"] if m["clip_id"] == clip_id), None)
             if mention:
                 # Same place named twice in one clip: one mention, opinions joined.
                 opinions = [mention["speaker_opinion"], f.get("speaker_opinion")]
                 mention["speaker_opinion"] = "; ".join(o for o in opinions if o) or None
             else:
                 rec["mentions"].append({
-                    "clip_id": clip.get("clip_id"),
-                    "creator": source.get("creator"),
-                    "speaker_opinion": f.get("speaker_opinion"),
+                    "clip_id": clip_id,
+                    "creator": creator,
+                    "speaker_opinion": f.get("speaker_opinion") or None,
                 })
 
     for rec in records.values():

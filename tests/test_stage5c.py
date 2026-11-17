@@ -24,6 +24,8 @@ ROUTES = {}
 class FakeOpener:
     def open(self, request, timeout=None):
         target = ROUTES.get(request.full_url)
+        if isinstance(target, BaseException):
+            raise target
         if target is None:
             raise urllib.error.URLError("offline")
         headers = email.message.Message()
@@ -217,6 +219,98 @@ before = PLACES.read_bytes()
 out = run(*CLIPS.glob("*.json"))
 check("14 run everything again: places.json unchanged, no new places", PLACES.read_bytes() == before
       and "new (0)" in out, out)
+
+# R. run it twice: every kind of value -> the 2nd run changes nothing
+NAMES = ["Alpha Bakery", "Mekong Grill", "Lotus Spa", "Kampot Pepper House", "Riverside Noodles",
+         "Golden Tuk Tuk Bar", "Jasmine Tea Room", "Orchid Florist"]
+for i, (kind, over, drop) in enumerate([
+        ("place_id null", {}, None), ('place_id ""', {"place_id": ""}, None), ("place_id missing", {}, "place_id"),
+        ("place_name_alt null", {"place_name_alt": None}, None), ('place_name_alt ""', {"place_name_alt": ""}, None),
+        ("place_name_alt missing", {}, "place_name_alt"), ('google_maps_url ""', {"google_maps_url": ""}, None),
+        ("google_maps_url missing", {}, "google_maps_url")]):
+    p = clip(f"PP-2{i:02d}", dict(place_name=NAMES[i], **over))
+    if drop:
+        c = load(p)
+        del c["fields"][0][drop]
+        p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+    out1 = run(p)
+    raw, places_raw = p.read_bytes(), PLACES.read_bytes()
+    out = run(p)
+    check(f"R {kind}: 1st run gives a new place_id; 2nd run changes nothing (clip and places.json)",
+          (pid(p) or "").startswith("tvna_p_") and p.read_bytes() == raw and PLACES.read_bytes() == places_raw
+          and "new (0)" in out and "matched (0)" in out, (out1, out))
+
+# R. Maps links: the 2nd run reads none (every place already has a place_id)
+NET = []
+_open = FakeOpener.open
+def counted_open(self, request, timeout=None):
+    NET.append(request.full_url)
+    return _open(self, request, timeout)
+FakeOpener.open = counted_open
+ROUTES["https://maps.app.goo.gl/twice"] = LONG.replace(FID, "0x31095100aaaa:0x1111")
+mp = clip("PP-299", dict(place_name="Twice Cafe", google_maps_url="https://maps.app.goo.gl/twice"))
+NET.clear()
+run(mp)
+first, raw, places_raw = len(NET), mp.read_bytes(), PLACES.read_bytes()
+NET.clear()
+out = run(mp)
+check("R short Maps link: 1st run reads it; 2nd run reads no link and changes nothing",
+      first >= 1 and not NET and mp.read_bytes() == raw and PLACES.read_bytes() == places_raw, (first, NET, out))
+NET.clear()
+run(*sorted(CLIPS.glob("*.json")))
+raw_all = {q: q.read_bytes() for q in CLIPS.glob("*.json")}
+places_raw = PLACES.read_bytes()
+NET.clear()
+out = run(*sorted(CLIPS.glob("*.json")))
+check("R all clips: 2nd run changes no file (unclear places stay unclear)",
+      all(q.read_bytes() == b for q, b in raw_all.items()) and PLACES.read_bytes() == places_raw
+      and "matched (0)" in out and "new (0)" in out, out)
+
+# S. hand-typed values and broken connections
+sp = clip("PP-300", dict(place_name="Saffron Lane", place_name_alt="Saffron", google_maps_url=""))
+run(sp)
+e = entry(pid(sp)) if pid(sp) else {}
+check('S1 place_name_alt typed as one text, not a list: saved as one alias, not letters',
+      e.get("aliases") == ["Saffron Lane", "Saffron"], e)
+check('S2 google_maps_url "" in a clip -> null in places.json', "google_maps_url" in e and e["google_maps_url"] is None, e)
+
+data = load(PLACES)
+data.append({"place_id": "tvna_p_0900", "place_name": "Null Alias Cafe", "aliases": None, "area": None,
+             "google_maps_url": None})
+data.append({"place_id": "tvna_p_0901", "place_name": "No Alias Key Bar", "area": []})
+PLACES.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+na = clip("PP-301", dict(place_name="Null Alias Cafe", place_name_alt=["NA Cafe"]))
+nk = clip("PP-302", dict(place_name="No Alias Key Bar"))
+try:
+    out = run(na, nk)
+    crashed = ""
+except Exception as ex:  # noqa: BLE001
+    out, crashed = "", repr(ex)
+check("S3 places.json entry with aliases null or missing: no crash, matched, aliases become a list",
+      not crashed and pid(na) == "tvna_p_0900" and pid(nk) == "tvna_p_0901"
+      and entry("tvna_p_0900")["aliases"] == ["Null Alias Cafe", "NA Cafe"], crashed or out)
+
+ROUTES["https://maps.app.goo.gl/slow"] = TimeoutError("timed out")
+sl = clip("PP-303", dict(place_name="Slow Link Diner", google_maps_url="https://maps.app.goo.gl/slow"))
+try:
+    out = run(sl)
+    crashed = ""
+except Exception as ex:  # noqa: BLE001
+    out, crashed = "", repr(ex)
+check("S4 Maps link times out: no crash, reported, place checked by name",
+      not crashed and "maps.app.goo.gl/slow: no connection (TimeoutError)" in out and bool(pid(sl)), crashed or out)
+
+ROUTES["https://maps.app.goo.gl/ctrlc"] = KeyboardInterrupt()
+first = clip("PP-304", dict(place_name="Brand New Noodle Bar"))
+stop = clip("PP-305", dict(place_name="Stopped Cafe", google_maps_url="https://maps.app.goo.gl/ctrlc"))
+raw_first, places_raw = first.read_bytes(), PLACES.read_bytes()
+try:
+    run(first, stop)
+    stopped = False
+except KeyboardInterrupt:
+    stopped = True
+check("S5 Ctrl-C in the middle of a run: nothing written (no clip with a place_id places.json doesn't have)",
+      stopped and first.read_bytes() == raw_first and PLACES.read_bytes() == places_raw)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

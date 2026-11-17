@@ -22,7 +22,14 @@ def main():
     args = ap.parse_args()
 
     kept, moved, no_url, problems = {}, [], [], []
-    for path in sorted(Path(p) for p in args.clips):
+    # The same file given twice (e.g. two globs) is one clip, not a duplicate of itself.
+    unique = {}
+    for p in args.clips:
+        unique.setdefault(Path(p).resolve(), Path(p))
+    for path in sorted(unique.values()):
+        if not path.is_file():
+            problems.append(f"{path.name}: not found (already moved to duplicates/?), skipped")
+            continue
         clip = load_json(path)
         key = video_key((clip.get("source") or {}).get("url"))
         if not key:

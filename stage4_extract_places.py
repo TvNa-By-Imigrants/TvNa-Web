@@ -30,6 +30,7 @@ from tvna_common import (
     display_path,
     gemini_client,
     generate_with_backup,
+    has_places,
     load_areas,
     load_json,
     match_districts,
@@ -282,7 +283,7 @@ def extract_clip(client, path: Path, models: List[str], force: bool, answers_dir
 
     if skip_reviewed(clip, clip_id):
         return "skipped"
-    if clip.get("fields") is not None and not force:
+    if has_places(clip) and not force:
         print(f"{clip_id}: already has places. Skipped. Use --force to find them again.")
         return "skipped"
     transcript = (clip.get("stt") or {}).get("transcript")

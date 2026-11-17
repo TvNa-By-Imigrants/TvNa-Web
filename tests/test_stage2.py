@@ -232,9 +232,50 @@ FakeYDL.mode = "fail"
 raw = p16d.read_bytes()
 code, out = run(p16d)
 FakeYDL.mode = "sound"
-check("16d caption read fails: message, clip unchanged", code == 1 and p16d.read_bytes() == raw
-      and "Download failed" in out, out)
+check("16d caption read fails (video gone): message, skipped not failed, clip unchanged, stage 3 still next",
+      code == 0 and p16d.read_bytes() == raw and "couldn't read the caption. Download failed" in out
+      and "Skipped; nothing changed" in out and f"Next: python stage3_transcribe.py {p16d}" in out, out)
 FakeYDL.caption = CAPTION
+
+# R. run it twice: every kind of value -> the 2nd run changes nothing and doesn't ask TikTok
+MISSING = object()
+FakeYDL.mode, FakeYDL.caption = "sound", CAPTION
+n = 0
+for audio_kind in ["WAV there", "null", '""', "missing"]:
+    for cap_kind, cap in [("filled", "Old caption"), ("null", None), ('""', ""), ("missing", MISSING)]:
+        n += 1
+        name = f"PP-1{n:02d}"
+        p = clip(name)
+        c = load(p)
+        if audio_kind == "WAV there":
+            shutil.copyfile(AUDIO / "PP-002.wav", AUDIO / f"{name}.wav")
+            c["audio_file"] = f"{name}.wav"
+        elif audio_kind == "missing":
+            del c["audio_file"]
+        else:
+            c["audio_file"] = None if audio_kind == "null" else ""
+        if cap is MISSING:
+            del c["source"]["caption"]
+        else:
+            c["source"]["caption"] = cap
+        p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+        FakeYDL.seen_opts, downloads = None, FakeYDL.downloads
+        run(p)
+        asked, downloaded = FakeYDL.seen_opts is not None, FakeYDL.downloads > downloads
+        if audio_kind != "WAV there":
+            first = asked and downloaded
+        elif cap_kind in ("filled", "null"):
+            first = not asked and load(p)["source"]["caption"] == cap
+        else:
+            first = asked and not downloaded and load(p)["source"]["caption"] == CAPTION
+        check(f"R audio_file {audio_kind}, caption {cap_kind}: 1st run "
+              + ("downloads" if audio_kind != "WAV there" else
+                 "skipped" if cap_kind in ("filled", "null") else "reads the caption only (no download)"), first)
+        raw = p.read_bytes()
+        FakeYDL.seen_opts = None
+        code, out = run(p)
+        check(f"R audio_file {audio_kind}, caption {cap_kind}: 2nd run skipped, TikTok not asked, file unchanged",
+              code == 0 and "Skipped" in out and FakeYDL.seen_opts is None and p.read_bytes() == raw, out)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

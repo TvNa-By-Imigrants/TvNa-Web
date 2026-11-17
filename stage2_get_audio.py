@@ -170,13 +170,19 @@ def get_audio(clip_path: Path, audio_dir: Path, force: bool) -> str:
 
     old = clip.get("audio_file")
     if old and (audio_dir / old).is_file() and not force:
-        # A saved null means "the video has no caption"; only clips made before captions lack the key.
-        if "caption" in source:
+        # Saved null = the video has no caption (done). Missing key (clip from before captions) or "" = read it.
+        if source.get("caption", "") != "":
             print(f"{clip_id}: already has audio ({display_path(audio_dir / old)}). Skipped. "
                   "Use --force to make it again.")
             return "skipped"
         print(f"{clip_id}: already has audio; reading the caption from TikTok (no download) ...")
-        posted = fill_from_tiktok(clip, ask_tiktok(url, None))
+        try:
+            info = ask_tiktok(url, None)
+        except ClipError as e:
+            print(f"{clip_id}: couldn't read the caption. {e}\n  The audio is fine, so stage 3 can go on. "
+                  "Skipped; nothing changed.")
+            return "skipped"
+        posted = fill_from_tiktok(clip, info)
         save_json(clip_path, clip)
         print(f"{clip_id}: saved the caption")
         print_tiktok_info(clip, posted)

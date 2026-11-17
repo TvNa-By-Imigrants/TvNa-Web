@@ -315,6 +315,35 @@ s4.gemini_client = no_key
 code, out = run(clip("PP-014"))
 check("10 no API key: clear message", code == 1 and "GEMINI_API_KEY is missing" in out, out)
 
+# R. run it twice: every kind of value -> the 2nd run changes nothing and doesn't call Gemini
+s4.gemini_client = fake_client  # test 'no API key' above swapped it out
+MISSING = object()
+for i, (kind, fields, transcript, first_calls) in enumerate([
+        ("fields filled", "RUN", TRANSCRIPT, 1),
+        ("fields [] (ran, no places)", [], TRANSCRIPT, 0),
+        ("fields null", None, TRANSCRIPT, 1),
+        ('fields ""', "", TRANSCRIPT, 1),
+        ("fields missing", MISSING, TRANSCRIPT, 1),
+        ("[no speech]", None, "[no speech]", 0)]):
+    name = f"PP-1{i:02d}"
+    p = clip(name, transcript=transcript)
+    c = load(p)
+    if fields is MISSING:
+        del c["fields"]
+    elif fields != "RUN":
+        c["fields"] = fields
+    p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+    reset()
+    run(p)
+    calls = len(FAKE.models.calls)
+    ans = ANSWERS / f"{name}.json"
+    raw, ans_raw = p.read_bytes(), (ans.read_bytes() if ans.exists() else None)
+    reset()
+    code, out = run(p)
+    check(f"R {kind}: 1st run {first_calls} Gemini call(s); 2nd run skipped, no call, clip and answer unchanged",
+          calls == first_calls and code == 0 and "Skipped" in out and not FAKE.models.calls
+          and p.read_bytes() == raw and (ans.read_bytes() if ans.exists() else None) == ans_raw, out)
+
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(0 if all(results) else 1)
