@@ -130,7 +130,7 @@ The English and the Khmer name both match. For example, ចំការមន be
 
 Made automatically in stage 6 from the 3 files above.
 
-**One name per place:** `place_name` comes from places.json. Other names (`aliases` in places.json, `place_name_alt` in the clips) are **not** in this file. They stay in the pipeline only, for matching. A misheard name reaches the website only if it is the `place_name` when stage 5c creates the place, so the team picks the name in 5b, before 5c (section 6, "Name").
+**One name per place:** `place_name` comes from places.json. Other names (`aliases` in places.json, `place_name_alt` in the clips) are **not** in this file. They stay in the pipeline only, for matching. Stage 5c only creates a place from a `verified` clip, so the name the team approved in 5b becomes the website name (section 6, "Name").
 
 ```json
 {
@@ -164,12 +164,13 @@ A link means the **same value is written in two files**.
 | Which clip? | `mentions[].clip_id` in the final dataset | `clip_id` in the clip file | `"02"` |
 
 Stage 6 joins everything. For each `place_id` it finds all clips with that id:
-- `place_name` = the name in places.json. If it is empty, the script writes `null` and warns. It also warns when a `verified` clip calls the place by a different name, so the team can decide which name the website shows.
+- `place_name` = the name in places.json. If it is empty, the script writes `null` and warns.
+- Places with no `place_id` yet are counted in one warning line. Stage 5c lists them one by one.
 - `popularity` = number of **different creators** (here `@motokew` + `@foodkh` = 2).
 - `mentions` = one entry per clip: `clip_id`, `creator`, `speaker_opinion`.
 - `category`, `price_range`, `area`, `area_description`, `opening_hours`, `menu_items` = **lists of unique values** from all clips. `area` also takes the districts from places.json.
 - The script warns when clips disagree on `category`, `price_range` or `opening_hours`. The team checks these.
-- Places that are `rejected`, or have no `place_id`, are left out.
+- Only `verified` places with a `place_id` are published. Others are left out; one that has a `place_id` but isn't `verified` gets a warning.
 - A clip with no `creator` is still listed in `mentions`, but it does not count in `popularity`.
 
 **Key rule:** linked values must be spelled **exactly the same**. "Boeung Keng Kang" and "Boeng Keng Kang" do not match.
@@ -196,7 +197,7 @@ Anything not filled yet stays `null`.
 | 4. Transcript + caption to fields | LLM + code | `extraction` and every place in `fields` (see below) | `extract_places_gemini.py` |
 | 5a. Remove duplicates | Script | moves duplicate clip files, adds `duplicate_of` | `dedupe_clips.py` |
 | 5b. Team review | Team | `area` (if empty), `google_maps_url`, missing values, `cleaned_by`, `cleaner_note`, status `verified` or `rejected` | none, edit the clip file |
-| 5c. Match places | Script, then team | `place_id` (never the LLM), places.json | `match_places.py` |
+| 5c. Match places | Script, then team | `place_id` (never the LLM; `verified` places only), places.json | `match_places.py` |
 | 6. Final dataset | Script | `final_dataset.json` | `build_final_dataset.py` |
 
 In stage 4:
@@ -275,7 +276,7 @@ These 3 come from the team's research on 10 clips. The other fields are still ex
 
 The rule in code: no name or below 0.3 → `rejected`; 0.7 or below → `needs_review`; above 0.7 → `auto_added`.
 
-A person changes the status to `verified` (or `rejected`) after checking. The score is set once in stage 4. It is **not** calculated again after the team fills fields.
+A person changes the status to `verified` (or `rejected`) after checking. Only `verified` places go on to stage 5c and the website. The score is set once in stage 4. It is **not** calculated again after the team fills fields.
 
 ---
 
@@ -287,7 +288,7 @@ A person changes the status to `verified` (or `rejected`) after checking. The sc
 4. Copy the Share link into `google_maps_url`.
 5. Pick the district from areas.json, using the Maps address. Write it in `area` as a list, e.g. `["Chamkar Mon"]`. For branches, add one district per branch.
 6. Can't find it? Leave both `null` and explain in `cleaner_note`.
-7. Write your name in `cleaned_by` and set the status.
+7. Write your name in `cleaned_by` and set the status: `verified` (it goes on to 5c and the website) or `rejected`.
 
 Example: "near Russian Market" → found on Google Maps → address in Chamkar Mon → `"area": ["Chamkar Mon"]`.
 
@@ -300,7 +301,7 @@ The website shows **one name per place**. Pick it before stage 5c:
 1. Check `place_name` against the video, the caption and Google Maps.
 2. If a name in `place_name_alt` is the right one, swap them: the right name in `place_name`, the other in `place_name_alt`. Keep the misheard name in `place_name_alt`, so future clips that mishear it the same way still match.
 
-The name only counts when stage 5c **creates** the place in places.json. For a place already in places.json, the website name is `place_name` in places.json: edit it there. The old name is already in `aliases`, so matching still works. Stage 6 warns when a `verified` clip names the place differently from places.json.
+The name only counts when stage 5c **creates** the place in places.json. For a place already in places.json, the website name is `place_name` in places.json: edit it there. The old name is already in `aliases`, so matching still works. When a clip calls a known place something else, stage 5c says so once in its report: `website name stays "…"`.
 
 ---
 
@@ -330,6 +331,7 @@ How a clip place gets its `place_id` (`match_places.py`):
 | No place matches | New entry in places.json with a new id (`tvna_p_0006`, ...) | new |
 | More than one place matches | `place_id` stays null. The team picks the id from places.json and writes it in the clip | unclear |
 
+- Only `verified` places are matched. `rejected` places are skipped. Every other place is listed as `waiting for review` with its status, and nothing changes for it (not even a `place_id` the team wrote).
 - Skipped: places that already have a `place_id`, `rejected` places, places with no name.
 - A `place_id` that is not in places.json is reported as `unknown_id`.
 - The team checks the report. For matched and new places, confirm it is the right place by name, aliases and `google_maps_url`.
@@ -362,7 +364,6 @@ Empty templates (in `templates/`): `tvna_clip_template.json`, `tvna_clip_place_t
 - **Sponsored:** removed for now. One value per clip would count for every place in a multi-place clip. If it comes back, it should be per place.
 - **Similar names:** only exact matches. A typo ("Tea Kingdon") becomes a new place. A similarity score (for example 95 = same, 75–95 = team decides) is not built.
 - **Final dataset extras:** `url` and `posted_at` in `mentions`, and `sub_category`, are not included.
-- **Unreviewed names:** stage 5c also creates places from clips that are not `verified` yet, so their name (Gemini's) can reach the website if 5c runs before the review.
 - **Score after review:** `completeness` is not recalculated after the team fills fields.
 - **Outside Phnom Penh:** places in other provinces (e.g. Siem Reap in `clips/02.json`) are not rejected automatically. The team decides.
 - **Branches:** a place has one `google_maps_url`, even with several branches.

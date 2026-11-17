@@ -166,10 +166,18 @@ def has_places(clip: dict) -> bool:
     return isinstance(clip.get("fields"), list)
 
 
+def is_rejected(place: dict) -> bool:
+    return place.get("verification_status") == "rejected"
+
+
+def is_verified(place: dict) -> bool:
+    """The team checked this place in stage 5b and approved it. Only these get a place_id and reach the website."""
+    return place.get("verification_status") == "verified"
+
+
 def reviewed_places(clip: dict) -> List[dict]:
     """Places the team checked in stage 5b: a name in cleaned_by, or status verified."""
-    return [p for p in clip.get("fields") or []
-            if p.get("cleaned_by") or p.get("verification_status") == "verified"]
+    return [p for p in clip.get("fields") or [] if p.get("cleaned_by") or is_verified(p)]
 
 
 def skip_reviewed(clip: dict, clip_id: str) -> bool:

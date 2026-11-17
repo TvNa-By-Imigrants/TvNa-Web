@@ -34,7 +34,7 @@ def drop_missing(d):
 
 def place(**over):
     return drop_missing(dict(place_id=None, place_name="Tea Kingdom", place_name_alt=[], category="cafe",
-                             area=None, speaker_opinion="Good tea", verification_status="needs_review") | over)
+                             area=None, speaker_opinion="Good tea", verification_status="verified") | over)
 
 def clip(name, places, creator="@tester", fields_value=MISSING, source=MISSING):
     c = load(PIPE / "templates/tvna_clip_template.json")
@@ -204,14 +204,51 @@ check("W2 opinion of only spaces -> null; creator with spaces trimmed; creator t
       and r2.get("mentions", [{}])[0].get("creator", "x") is None, (r1, r2))
 check("W3 same place twice in one clip: the same opinion is not repeated, a different one is joined",
       m1.get("PP-301", {}).get("speaker_opinion") == "Good tea; Nice staff", m1.get("PP-301"))
-warn = 'PP-303.json: the team checked the name "ALWAYS selfie booth", but the website shows "Luv selfie booth"'
-check("W4 verified clip names the place differently from places.json: warned once",
-      out.count(warn) == 1, out)
-check("W5 no warning for an unchecked clip, or the same name in other capitals",
-      "PP-304.json: the team checked" not in out and "PP-305.json: the team checked" not in out, out)
+check("W4 verified clips with other spellings: published under the places.json name, no warning (5c says it once)",
+      r1.get("place_name") == "Luv selfie booth" and "PP-303.json" not in out and "PP-305.json" not in out
+      and {"PP-303", "PP-305"} <= set(m1), (out, m1))
+check("W5 unchecked clip: left out, warned once with its status",
+      out.count('PP-304.json "Always Selfie-Booth": verification_status "needs_review", not verified by the team, '
+                'left out') == 1 and "PP-304" not in m1, out)
 raw_out = OUT.read_bytes() if OUT.exists() else b""
 code2, out2 = run()
 check("W6 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
+
+# V. only places the team approved (verified) are published
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+write(PLACES, [{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "aliases": [], "area": []}])
+clip("PP-501", [place(place_id="tvna_p_0001", speaker_opinion="Checked")], creator="@ok")
+for i, status in enumerate(["needs_review", "auto_added", None, "", MISSING, "Verified"], start=2):
+    clip(f"PP-50{i}", [place(place_id="tvna_p_0001", verification_status=status, speaker_opinion="Not checked")],
+         creator=f"@c{i}")
+clip("PP-509", [place(place_id=None, verification_status="needs_review")], creator="@n")
+code, out = run()
+rec = {r["place_id"]: r for r in load(OUT)} if OUT.exists() else {}
+r1 = rec.get("tvna_p_0001", {})
+shown = ['"needs_review"', '"auto_added"', "null", '""', "null", '"Verified"']
+check('V1 status needs_review / auto_added / null / "" / missing / a typo: left out, warned with the status; '
+      "verified published",
+      code == 0 and [m["clip_id"] for m in r1.get("mentions", [])] == ["PP-501"] and r1.get("popularity") == 1
+      and all(f'PP-50{i}.json "Tea Kingdom": verification_status {shown[i - 2]}, not verified by the team, left out'
+              in out for i in range(2, 8))
+      and "Not checked" not in OUT.read_text(encoding="utf-8"), (out, r1))
+check("V2 places with no place_id: counted in one line (5c lists them), not one by one",
+      "1 place has no place_id yet, so not published. Stage 5c lists them" in out and "PP-509" not in out, out)
+raw_out = OUT.read_bytes()
+code2, out2 = run()
+check("V3 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
+
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+clip("PP-601", [place(place_id="tvna_p_0001", verification_status="needs_review"),
+                place(place_id="tvna_p_0001", verification_status="needs_review")], creator=None)
+clip("PP-602", [place(place_id=None, verification_status="rejected")], creator="")
+code, out = run()
+check("V4 same unchecked place twice in one clip: warned once",
+      out.count('PP-601.json "Tea Kingdom": verification_status "needs_review"') == 1, out)
+check("V5 no creator warning for a clip with nothing published; a rejected place is not counted as missing an id",
+      "no creator" not in out and "no place_id yet" not in out, out)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

@@ -29,7 +29,7 @@ _Last updated: 2026-11-17_
 | 4. Transcript → places | Gemini finds each place from the transcript and the TikTok caption | `stage4_extract_places.py` | ✅ Built and tested (Phnom Penh check planned) |
 | 5a. Remove duplicates | Moves clips of the same video to `duplicates/` | `stage5a_dedupe_clips.py` | ✅ Built and tested |
 | 5b. Team review | People check and fill missing fields | by hand + `stage5b_validate_clips.py` | ⏳ Validator planned |
-| 5c. Match places | Gives each place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built and tested |
+| 5c. Match places | Gives each `verified` place a `place_id` from `places.json` | `stage5c_match_places.py` | ✅ Built and tested |
 | 6. Final dataset | Builds `data/final_dataset.json` | `stage6_build_final_dataset.py` | ✅ Built and tested |
 
 **Coming next, in order:**
@@ -124,8 +124,8 @@ Replace `PP-NNN` with the number stage 1 printed. Stages 2–4 also take several
 
 ```sh
 python stage5a_dedupe_clips.py data/clips/*.json          # 5a. ✅ move clips of the same video to duplicates/
-# 5b. team review: check and fill the clip files by hand (field guide, section 6)
-python stage5c_match_places.py data/clips/*.json          # 5c. ✅ give each place a place_id, update places.json
+# 5b. team review: check and fill the clip files by hand, set "verification_status": "verified" (field guide, section 6)
+python stage5c_match_places.py data/clips/*.json          # 5c. ✅ give each verified place a place_id, update places.json
 python stage6_build_final_dataset.py data/clips/*.json    # 6.  ✅ build data/final_dataset.json
 ```
 
@@ -325,7 +325,11 @@ A clip the team already reviewed (a name in `cleaned_by`, or status `verified`) 
 python stage5c_match_places.py data/clips/*.json
 ```
 
-Run after the team review (5b). Gives each place a `place_id` from `data/places.json`, so clips about the same place count as one. Each place is checked in this order:
+Run after the team review (5b). Gives each place a `place_id` from `data/places.json`, so clips about the same place count as one.
+
+**Only places the team marked `"verification_status": "verified"` get a `place_id`.** The rest are listed under **waiting for review**, and nothing changes for them. 5c names a new place after its clip and that name goes to the website, so a name Gemini got wrong can't get there before a person checks it.
+
+Each verified place is checked in this order:
 
 | Check | Result |
 |---|---|
@@ -337,17 +341,18 @@ Run after the team review (5b). Gives each place a `place_id` from `data/places.
 
 **For each unclear place:** write the suggested `place_id` in the clip if it's the same place, or `"new"` if not, then run 5c again. Every name that gets a `place_id` is saved as an alias, so it matches exactly next time.
 
-You'll see (here a second clip spelled the name differently):
+You'll see (real run on copies of PP-002 and PP-003, after the team checked only PP-003):
 
 ```
-matched (1):
-  PP-099.json  "Han-Jan Coffee & Eatery" -> tvna_p_0001 (fuzzy 97% like "Hanjang Coffee & Eatery"; new aliases: Han-Jan Coffee & Eatery)
-new (2):
-  PP-002.json  "Hanjang Coffee & Eatery" -> tvna_p_0001
-  PP-003.json  "ALWAYS selfie booth" -> tvna_p_0002
+matched (0):
+new (1):
+  PP-003.json  "Luv selfie booth" -> tvna_p_0001
 unclear (0):
 unknown_id (0):
+waiting for review (1):
+  PP-002.json  "Hanjan Coffee" (verification_status "needs_review")
 skipped (0): already have a place_id, rejected, or no name
+Waiting places are matched (and published by stage 6) once the team checks them (5b) and writes "verification_status": "verified". Then run this again.
 Next: python stage6_build_final_dataset.py data/clips/*.json
 ```
 
@@ -355,9 +360,11 @@ Next: python stage6_build_final_dataset.py data/clips/*.json
 
 | Try this | You should see |
 |---|---|
-| A clip with a slightly different spelling of a known place | `matched … (fuzzy 9N% like "…")` |
+| A clip the team hasn't checked yet | `waiting for review … (verification_status "needs_review")`; no `place_id`, places.json unchanged |
+| Set `"verification_status": "verified"` in it, run again | `new (1): … -> tvna_p_000N`, named after the clip's `place_name` |
+| A verified clip with a slightly different spelling of a known place | `matched … (fuzzy 9N% like "…")` |
 | "Luv selfie booth" when "ALWAYS selfie booth" is known | `unclear … maybe tvna_p_0002 "ALWAYS selfie booth" (77%)` |
-| Write that `place_id` in the clip, run again | `set by the team; new aliases: Luv selfie booth` |
+| Write that `place_id` in the clip, run again | `set by the team; new aliases: Luv selfie booth; website name stays "ALWAYS selfie booth"` |
 | The same command again | nothing new; places with a `place_id` are skipped, and their Maps links aren't read again |
 
 ---
@@ -368,11 +375,12 @@ Built and tested. The commands are in [How to run](#how-to-run).
 
 - **5a** again moves nothing. A clip file that is gone (already moved) is listed under `problems`, not an error.
 - **6** rebuilds `data/final_dataset.json` from scratch each time, so the same clips give the same file. Empty text (`""`) is written as `null`.
-- **6** publishes **one name per place**: `place_name` from `data/places.json`. Other names (`aliases`, and the clips' `place_name_alt`) stay in the pipeline for matching only, so a misheard name like "ALWAYS selfie booth" stays off the website, as long as the team picks the right name in 5b before 5c (5c names a new place after its clip). To change a place's name later, edit `place_name` in places.json (field guide, section 6 "Name"). A place with no name gets `null` and a warning; a `verified` clip that names the place differently also gets a warning.
+- **6** publishes only `verified` places. A place with a `place_id` that isn't verified is left out, with a warning that shows its status. Places with no `place_id` yet are counted in one warning line.
+- **6** publishes **one name per place**: `place_name` from `data/places.json`. Other names (`aliases`, and the clips' `place_name_alt`) stay in the pipeline for matching only, so a misheard name like "ALWAYS selfie booth" stays off the website. 5c names a new place after its verified clip, so the name the team approved in 5b is the one published. To change a place's name later, edit `place_name` in places.json (field guide, section 6 "Name"). A place with no name gets `null` and a warning. When a clip calls a known place something else, 5c says so once: `website name stays "…"`.
 
 > **Website team:** since 2026-11-17, `final_dataset.json` has **no `place_name_alt`** field. Use `place_name` only. The full field list is in `templates/tvna_final_dataset_template.json`.
 
-Real run on PP-002 and PP-003 (copies, through 5c and 6):
+Real run on copies of PP-002 and PP-003, both marked `verified` by hand (copies only), through 5c and 6:
 
 | Clip | Website name (`place_name`) | `aliases` in places.json (matching only) |
 |---|---|---|

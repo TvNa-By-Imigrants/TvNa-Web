@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Stage 5c: give each place in the clip files a place_id from places.json.
-Run after the team review (stage 5b). Each place is checked in this order:
+Run after the team review (stage 5b). Only places the team approved ("verification_status": "verified") are
+matched. Rejected places are skipped; all others are listed as waiting for review and nothing is changed for them,
+so a name Gemini got wrong can't become a place's name on the website. Each approved place is checked in this order:
 1. same Google Maps link -> matched
 2. same name or alias (ignoring capitals, spaces and punctuation) -> matched
 3. name score 95 or more (Latin names only) -> matched; the new spelling is saved as an alias
@@ -13,6 +15,7 @@ Usage:
     python stage5c_match_places.py data/clips/*.json
 """
 import argparse
+import json
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -22,6 +25,8 @@ from tvna_common import (
     PLACES_FILE,
     as_list,
     has_khmer,
+    is_rejected,
+    is_verified,
     load_areas,
     load_json,
     maps_key,
@@ -111,6 +116,14 @@ def remember(entry: dict, place: dict, names: List[str], areas) -> List[str]:
     return notes
 
 
+def website_name(entry: dict, place: dict) -> List[str]:
+    """A note when this clip calls the place something else: the website keeps showing the places.json name."""
+    ours = name_key(place.get("place_name"))
+    if ours and ours != name_key(entry.get("place_name")):
+        return [f'website name stays "{entry.get("place_name")}"']
+    return []
+
+
 def closest(names: List[str], by_id: Dict[str, dict]) -> List[Tuple[int, bool, bool, str, str]]:
     """For each place in places.json, its closest name: (score, one name inside the other, Khmer, place_id, name).
     Best first."""
@@ -188,7 +201,7 @@ def main():
 
     for entry in places:
         index(entry)
-    report = {"matched": [], "new": [], "unclear": [], "unknown_id": []}
+    report = {"matched": [], "new": [], "unclear": [], "unknown_id": [], "waiting for review": []}
     skipped = 0
     places_changed = not places_path.exists()
     changed_clips = []
@@ -200,19 +213,31 @@ def main():
             label = f'{Path(path).name}  "{f.get("place_name")}"'
             names = [f.get("place_name"), *as_list(f.get("place_name_alt"))]
             set_by_team = f.get("place_id")
+            if is_rejected(f):
+                skipped += 1
+                continue
+            if not is_verified(f):
+                details = [f'verification_status {json.dumps(f.get("verification_status"), ensure_ascii=False)}']
+                if f.get("cleaned_by"):
+                    details.append('cleaned_by is filled: write "verified" if the place is checked')
+                if set_by_team:
+                    details.append(f"has place_id {set_by_team}, not published until verified")
+                report["waiting for review"].append(f"{label} ({'; '.join(details)})")
+                continue
             if set_by_team and set_by_team != NEW:
                 if set_by_team not in by_id:
                     report["unknown_id"].append(f"{label} -> {set_by_team} is not in places.json")
                     continue
                 notes = remember(by_id[set_by_team], f, names, areas)
                 if notes:
+                    notes += website_name(by_id[set_by_team], f)
                     index(by_id[set_by_team])
                     report["matched"].append(f"{label} -> {set_by_team} (set by the team; {'; '.join(notes)})")
                     places_changed = True
                 else:
                     skipped += 1
                 continue
-            if f.get("verification_status") == "rejected" or not f.get("place_name"):
+            if not f.get("place_name"):
                 skipped += 1
                 continue
 
@@ -232,6 +257,7 @@ def main():
             notes = ([why] if why else []) + remember(by_id[place_id], f, names, areas)
             if group == "new":
                 notes = [n for n in notes if not n.startswith("new aliases")]
+            notes += website_name(by_id[place_id], f)
             report[group].append(f"{label} -> {place_id}" + (f" ({'; '.join(notes)})" if notes else ""))
             index(by_id[place_id])
             f["place_id"] = place_id
@@ -256,6 +282,9 @@ def main():
         print(f"Maps link problems ({len(links.problems)}):")
         for line in links.problems:
             print(f"  {line}")
+    if report["waiting for review"]:
+        print('Waiting places are matched (and published by stage 6) once the team checks them (5b) and writes '
+              '"verification_status": "verified". Then run this again.')
     if report["unclear"]:
         print(f'For each unclear place: write the place_id in the clip if it is the same place, or "{NEW}" if not. '
               "Then run this again.")

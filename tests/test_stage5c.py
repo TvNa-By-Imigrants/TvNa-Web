@@ -100,7 +100,7 @@ def clip(name, *places):
     c = json.loads((PIPE / "templates/tvna_clip_template.json").read_text())
     c["clip_id"] = name
     c["fields"] = [dict(place_id=None, place_name=None, place_name_alt=[], area=None, google_maps_url=None,
-                        verification_status="needs_review") | p for p in places]
+                        verification_status="verified") | p for p in places]
     p = CLIPS / f"{name}.json"
     p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
     return p
@@ -311,6 +311,87 @@ except KeyboardInterrupt:
     stopped = True
 check("S5 Ctrl-C in the middle of a run: nothing written (no clip with a place_id places.json doesn't have)",
       stopped and first.read_bytes() == raw_first and PLACES.read_bytes() == places_raw)
+
+# V. only places the team approved (verified) get a place_id
+ROUTES["https://maps.app.goo.gl/waiting"] = LONG.replace(FID, "0x31095100bbbb:0x2222")
+STATUSES = [("needs_review", "needs_review"), ("auto_added", "auto_added"), ("null", None), ('""', ""),
+            ("missing", MISSING := object()), ('"Verified" (typo)', "Verified")]
+waiting = []
+for i, (kind, status) in enumerate(STATUSES):
+    p = clip(f"PP-40{i}", dict(place_name=f"Waiting Cafe {i}", google_maps_url="https://maps.app.goo.gl/waiting",
+                               verification_status=None if status is MISSING else status))
+    if status is MISSING:
+        c = load(p)
+        del c["fields"][0]["verification_status"]
+        p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+    waiting.append(p)
+raw_all, places_raw = {q: q.read_bytes() for q in waiting}, PLACES.read_bytes()
+for attempt in ("1st", "2nd"):
+    NET.clear()
+    out = run(*waiting)
+    check(f"V1 {attempt} run, status needs_review / auto_added / null / \"\" / missing / a typo: waiting, "
+          "nothing written, no Maps link read",
+          "waiting for review (6):" in out and all(q.read_bytes() == b for q, b in raw_all.items())
+          and PLACES.read_bytes() == places_raw and not NET and "new (0)" in out and "matched (0)" in out, (NET, out))
+check("V2 each waiting place listed with its status, and the team told what to do",
+      all(s in out for s in ['"Waiting Cafe 0" (verification_status "needs_review")',
+                             '"Waiting Cafe 2" (verification_status null)', '"Waiting Cafe 3" (verification_status "")',
+                             '"Waiting Cafe 4" (verification_status null)', '"Waiting Cafe 5" (verification_status "Verified")'])
+      and 'writes "verification_status": "verified". Then run this again.' in out, out)
+
+known = entry("tvna_p_0001")
+team_id = clip("PP-410", dict(place_name="Hanjan Cafe Unchecked", place_id="tvna_p_0001", area=["Sen Sok"],
+                              verification_status="needs_review"))
+team_rej = clip("PP-411", dict(place_name="Hanjan Cafe Rejected", place_id="tvna_p_0001", area=["Dangkao"],
+                               verification_status="rejected"))
+places_raw = PLACES.read_bytes()
+out = run(team_id, team_rej)
+check("V3 team wrote a place_id but the place is not verified (waiting) or rejected (skipped): "
+      "no alias, district or link saved",
+      PLACES.read_bytes() == places_raw and "waiting for review (1):" in out and "skipped (1)" in out
+      and entry("tvna_p_0001") == known
+      and '(verification_status "needs_review"; has place_id tvna_p_0001, not published until verified)' in out, out)
+cb = clip("PP-413", dict(place_name="Reviewed Cafe", verification_status="auto_added", cleaned_by="Dara"))
+out = run(cb)
+check("V3b cleaned_by filled but status not verified: waiting, and the team is told to write verified",
+      pid(cb) is None and 'cleaned_by is filled: write "verified" if the place is checked' in out, out)
+
+swap = clip("PP-412", dict(place_name="Moonlight Noodle House", place_name_alt=["Moon Night Noodle House"],
+                           verification_status="needs_review"))
+out = run(swap)
+check("V4 before the review: no place made", pid(swap) is None and "new (0)" in out, out)
+sw = load(swap)
+sw["fields"][0]["verification_status"] = "verified"
+swap.write_text(json.dumps(sw, ensure_ascii=False, indent=2), encoding="utf-8")
+out = run(swap)
+e = entry(pid(swap)) if pid(swap) else {}
+check("V5 after the team sets verified: new place, named after the clip's place_name, other name kept as alias",
+      "new (1):" in out and e.get("place_name") == "Moonlight Noodle House"
+      and e.get("aliases") == ["Moonlight Noodle House", "Moon Night Noodle House"], (out, e))
+raw, places_raw = swap.read_bytes(), PLACES.read_bytes()
+out = run(swap)
+check("V6 2nd run after verified: nothing changes", swap.read_bytes() == raw and PLACES.read_bytes() == places_raw
+      and "skipped (1)" in out, out)
+
+# W. a clip calls a known place something else: 5c says once which name the website keeps
+data = load(PLACES)
+data.append({"place_id": "tvna_p_0950", "place_name": "Old Gemini Name Noodle House",
+             "aliases": ["Old Gemini Name Noodle House"], "area": []})
+PLACES.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+fixed = clip("PP-420", dict(place_name="Right Name", place_id="tvna_p_0950"))
+out = run(fixed)
+check("W1 team-set place_id with a new name: alias saved, and the report says the website name stays",
+      'set by the team; new aliases: Right Name; website name stays "Old Gemini Name Noodle House"' in out
+      and entry("tvna_p_0950")["place_name"] == "Old Gemini Name Noodle House", out)
+out = run(fixed)
+check("W2 2nd run: skipped, the note is not repeated", "website name stays" not in out and "skipped (1)" in out, out)
+fz = clip("PP-421", dict(place_name="Old Gemini Name Noodle Houze"))
+out = run(fz)
+check("W3 fuzzy match: the report says the website name stays", pid(fz) == "tvna_p_0950"
+      and 'website name stays "Old Gemini Name Noodle House"' in out, out)
+same = clip("PP-422", dict(place_name="old gemini name noodle-house"))
+out = run(same)
+check("W4 same name in other capitals: no note", pid(same) == "tvna_p_0950" and "website name stays" not in out, out)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

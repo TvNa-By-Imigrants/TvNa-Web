@@ -4,6 +4,14 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-17: Only verified places get a place_id and reach the website
+
+**Decision:** stage 5c matches or creates a place only when the team set `"verification_status": "verified"` in 5b. Every other status (`needs_review`, `auto_added`, empty, a typo) is listed as "waiting for review", and nothing changes for it. Stage 6 also publishes only `verified` places; one with a `place_id` that isn't verified is left out with a warning.
+
+**Why:** 5c names a new place after its clip, and that name goes to the website. Before this, 5c also created places from unchecked clips, so a name Gemini got wrong could become the website name.
+
+**Other options:** let stage 6 warn about unchecked names but still publish them (rejected: the wrong name would still be shown).
+
 ## 2026-11-17: Stage 4 uses the TikTok caption (prompt v5)
 
 **Decision:** stage 4 reads the transcript and the caption.
@@ -33,8 +41,8 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 - The published name is `place_name` in places.json. Stage 5c sets it from the clip that creates the place, so the team picks the right name in 5b before 5c. To change it later, edit places.json; the old name is already in `aliases`.
 - An empty name is published as `null` with a warning. Stage 6 never takes an alias instead, because an alias may be a misheard name.
-- Stage 6 warns when a `verified` clip names the place differently from places.json.
-- Limit: 5c also names places from clips not reviewed yet, so the team must pick the name in 5b before running 5c.
+- When a clip calls a known place something else, 5c says once which name the website keeps (`website name stays "…"`). A stage 6 warning on every run was tried first, but it fired for every correct Khmer name or other spelling, so it was dropped.
+- 5c creates places only from `verified` clips (decision above), so the name the team approved is the one published.
 
 **Why:** a misheard name like "ALWAYS selfie booth" helps matching but must not be shown to visitors.
 
