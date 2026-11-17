@@ -34,9 +34,10 @@ _Last updated: 2026-11-16_
 
 **Coming next, in order:**
 1. **Next milestone: the improvement loop** (below)
-2. Automatic tests (`python -m unittest`)
+2. Automatic tests: the offline checks are in `tests/`; next, run them with `python -m unittest`
 3. The clip validator
 4. The Phnom Penh check in stage 4
+5. Next milestone: save each video's view/like/comment/share counts (stage 2), to help rank places
 
 **The improvement loop.** Gemini forgets everything after each run, so we save the team's fixes and give them back to it:
 
@@ -46,7 +47,7 @@ _Last updated: 2026-11-16_
 - Stages 3 and 4 get the known names and the TikTok caption as hints.
 - The first ~10 clips the team approves become a test set. A change to the prompt or model stays only if the score goes up.
 
-Steps: 1. keep Gemini's first answer ✅ · 2. save the TikTok caption · 3. save the team's fixes · 4. hints for Gemini · 5. test score
+Steps: 1. keep Gemini's first answer ✅ · 2. the TikTok caption (A. saved by stage 2 ✅ · B. used by stage 3 · C. used by stage 4 · D. one name on the website) · 3. save the team's fixes · 4. hints for Gemini · 5. test score
 
 ---
 
@@ -190,15 +191,24 @@ Next: python stage2_get_audio.py data/clips/PP-002.json
 python stage2_get_audio.py data/clips/PP-002.json
 ```
 
-Downloads the video, keeps only its sound as `data/audio/PP-002.wav` (the format stage 3 needs), and fills `posted_at` if it's empty. WAVs are not in git: for a teammate's clip, just run stage 2 on it.
+Downloads the video, keeps only its sound as `data/audio/PP-002.wav` (the format stage 3 needs), saves the creator's TikTok caption in `source.caption`, and fills `posted_at` if it's empty. WAVs are not in git: for a teammate's clip, just run stage 2 on it.
 
 You'll see:
 
 ```
 PP-002: downloading https://www.tiktok.com/@motokhiev.bydm/video/7706878472664222982 ...
 PP-002: saved data/audio/PP-002.wav (16 kHz, mono, 73.3 s)
+  caption: This yet-to-discover restaurant, has such a dope Tteobokki.  …
   posted_at: 2026-11-11 (from TikTok)
 Next: python stage3_transcribe.py data/clips/PP-002.json
+```
+
+The caption often has the place name written correctly, so stages 3 and 4 will use it. A clip that already has its WAV but no caption (made before captions were added) gets the caption only, with no download:
+
+```
+PP-003: already has audio; reading the caption from TikTok (no download) ...
+PP-003: saved the caption
+  caption: Comfortable and unique, best quality best memories.Welcome t …
 ```
 
 **Test it yourself:**
@@ -208,6 +218,7 @@ Next: python stage3_transcribe.py data/clips/PP-002.json
 | Your clip from stage 1 | `saved data/audio/PP-00N.wav …`. Play it: it's the video's sound |
 | The same command again | `already has audio … Skipped.` |
 | A clip whose video was deleted or private | `Download failed: …` then `Nothing changed in …` |
+| Open the clip file | `source.caption` has the TikTok caption, or `null` if the video has none |
 
 ---
 

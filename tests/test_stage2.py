@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import wave
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,9 +33,13 @@ ff("-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-c:v", "libx264", str(MEDIA
 # 2026-10-21 20:00 UTC = 2026-10-22 03:00 in Phnom Penh
 TS = int(datetime(2026, 10, 21, 20, 0, tzinfo=timezone.utc).timestamp())
 
+CAPTION = "Welcome to Tea Kingdom ☕ 📍 Toul Kork #phnompenh #milktea"
+
 class FakeYDL:
     mode = "sound"
     seen_opts = None
+    caption = CAPTION
+    downloads = 0
     def __init__(self, opts):
         self.opts = opts
         FakeYDL.seen_opts = opts
@@ -45,8 +50,10 @@ class FakeYDL:
     def extract_info(self, url, download):
         if FakeYDL.mode == "fail":
             raise yt_dlp.utils.DownloadError("ERROR: [TikTok] 7000000000000000001: Video not available")
-        shutil.copy(MEDIA / f"{FakeYDL.mode}.mp4", self.opts["outtmpl"].replace("%(ext)s", "mp4"))
-        return {"timestamp": TS, "upload_date": "20261021"}
+        if download:
+            FakeYDL.downloads += 1
+            shutil.copy(MEDIA / f"{FakeYDL.mode}.mp4", self.opts["outtmpl"].replace("%(ext)s", "mp4"))
+        return {"timestamp": TS, "upload_date": "20261021", "description": FakeYDL.caption}
 
 s2.yt_dlp.YoutubeDL = FakeYDL
 
@@ -100,6 +107,9 @@ check("1 normal: prints saved + posted_at + Next", "saved" in out and "posted_at
 check("1 normal: yt-dlp asks for the video file ('best', not the separate TikTok sound), quiet logger", FakeYDL.seen_opts["format"] == "best"
       and isinstance(FakeYDL.seen_opts["logger"], s2._QuietLogger))
 check("1 normal: no .part file left", not list(AUDIO.glob("*.part")))
+check("1 normal: caption saved (hashtags kept), printed short", c["source"]["caption"] == CAPTION
+      and f"  caption: {CAPTION}\n" in out and list(c["source"])[:4] == ["url", "platform", "creator", "caption"],
+      (c["source"], out))
 print("----- output of a normal run -----\n" + out + "----------------------------------")
 
 # 2. again -> skipped
@@ -175,6 +185,49 @@ os.environ["PATH"] = "/usr/bin:/bin"
 code, out = run(clip("PP-015"))
 os.environ["PATH"] = old_path
 check("15 ffmpeg missing: clear message", code == 1 and "ffmpeg is not installed" in out, out)
+
+# 16. caption for a clip that already has its WAV (an old clip from before captions): no download
+p16 = clip("PP-016")
+run(p16)
+c = load(p16)
+del c["source"]["caption"]
+p16.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+FakeYDL.downloads = 0
+FakeYDL.caption = "ហាងកាហ្វេ  Luv selfie booth   #selfie"
+code, out = run(p16)
+c = load(p16)
+check("16a WAV there, no caption: caption read with no download", code == 0 and FakeYDL.downloads == 0
+      and c["source"]["caption"] == "ហាងកាហ្វេ  Luv selfie booth   #selfie" and "saved the caption" in out
+      and "no download" in out, (c["source"], out))
+check("16a caption key put right after creator", list(c["source"])[:4] == ["url", "platform", "creator", "caption"],
+      list(c["source"]))
+check("16a Khmer caption is NFC", c["source"]["caption"] == unicodedata.normalize("NFC", c["source"]["caption"]))
+code, out = run(p16)
+check("16b caption there: skipped, no TikTok call", "Skipped" in out and FakeYDL.downloads == 0, out)
+
+long = "Best Korean food in town " * 4
+FakeYDL.caption = long
+p16l = clip("PP-019")
+code, out = run(p16l)
+check("16 long caption: whole caption saved, printed cut at 60 with …", load(p16l)["source"]["caption"] == long.strip()
+      and f"  caption: {long[:60]} …" in out, out)
+
+FakeYDL.caption = "   "
+p16c = clip("PP-017")
+code, out = run(p16c)
+check("16c empty caption saved as null, says so", load(p16c)["source"]["caption"] is None
+      and "caption: none (the video has no caption)" in out, out)
+
+FakeYDL.caption = None
+p16d = clip("PP-018")
+run(p16d)
+FakeYDL.mode = "fail"
+raw = p16d.read_bytes()
+code, out = run(p16d)
+FakeYDL.mode = "sound"
+check("16d caption read fails: message, clip unchanged", code == 1 and p16d.read_bytes() == raw
+      and "Download failed" in out, out)
+FakeYDL.caption = CAPTION
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

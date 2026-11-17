@@ -2,7 +2,8 @@
 """Stage 2: clip file -> data/audio/PP-NNN.wav (16 kHz, mono, 16-bit), ready for stage 3.
 Downloads the TikTok video from the clip's source.url with yt-dlp into a temporary folder,
 turns it into a WAV with ffmpeg, and sets audio_file. The video is deleted; the WAV is kept.
-Also fills source.posted_at from TikTok when it is empty.
+Also saves the TikTok caption in source.caption, and fills source.posted_at when it is empty.
+A clip that already has its WAV but no caption gets the caption only (no download).
 
 Usage:
     python stage2_get_audio.py data/clips/PP-002.json
@@ -16,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import wave
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -29,6 +31,7 @@ CLEAN_TIKTOK_URL = re.compile(r"https://www\.tiktok\.com/@[^/?#]+/video/\d+")
 SAMPLE_RATE = 16000
 # Cambodia time (UTC+7, no daylight saving), so a late-night post keeps its local date.
 CAMBODIA = timezone(timedelta(hours=7))
+CAPTION_PREVIEW = 60
 
 
 class _QuietLogger:
@@ -47,12 +50,13 @@ class _QuietLogger:
         pass
 
 
-def download(url: str, folder: Path) -> Tuple[Path, dict]:
-    """Download the video into folder, with the sound viewers hear (voice-over and music mixed)."""
+def ask_tiktok(url: str, folder: Optional[Path]) -> dict:
+    """The video's info from TikTok. With a folder, the video is also downloaded into it, with the sound
+    viewers hear (voice-over and music mixed)."""
     options = {
         # Not "bestaudio": TikTok's separate audio file is the song the video uses, without the voice-over.
         "format": "best",
-        "outtmpl": str(folder / "video.%(ext)s"),
+        "outtmpl": str((folder or Path(tempfile.gettempdir())) / "video.%(ext)s"),
         "noplaylist": True,
         "socket_timeout": 30,
         "color": "never",
@@ -60,11 +64,15 @@ def download(url: str, folder: Path) -> Tuple[Path, dict]:
     }
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=True)
+            return ydl.extract_info(url, download=folder is not None)
     except yt_dlp.utils.DownloadError as e:
         reason = str(e).removeprefix("ERROR: ")
         raise ClipError(f"Download failed: {reason}\n"
                         "  Check that the link opens in your browser; the video may be deleted or private.") from None
+
+
+def download(url: str, folder: Path) -> Tuple[Path, dict]:
+    info = ask_tiktok(url, folder)
     files = [p for p in folder.glob("video.*") if p.suffix != ".part"]
     if not files:
         raise ClipError("Download failed: yt-dlp finished but saved no file.")
@@ -105,6 +113,45 @@ def posted_date(info: dict) -> Optional[str]:
         return None
 
 
+def caption_text(info: dict) -> Optional[str]:
+    """The creator's caption (hashtags included), NFC; null when there is none."""
+    text = unicodedata.normalize("NFC", info.get("description") or "").strip()
+    return text or None
+
+
+def fill_from_tiktok(clip: dict, info: dict) -> Optional[str]:
+    """Save the caption (kept right after creator, as in the template) and fill posted_at if empty.
+    Returns the posted_at it filled, if any."""
+    source = clip.get("source") or {}
+    caption = caption_text(info)
+    if "caption" in source:
+        source["caption"] = caption
+    else:
+        ordered = {}
+        for key, value in source.items():
+            ordered[key] = value
+            if key == "creator":
+                ordered["caption"] = caption
+        ordered.setdefault("caption", caption)
+        source = ordered
+    posted = None
+    if not source.get("posted_at"):
+        posted = source["posted_at"] = posted_date(info)
+    clip["source"] = source
+    return posted
+
+
+def print_tiktok_info(clip: dict, posted: Optional[str]) -> None:
+    caption = clip["source"].get("caption")
+    if caption:
+        line = " ".join(caption.split())
+        print(f"  caption: {line[:CAPTION_PREVIEW]}{' …' if len(line) > CAPTION_PREVIEW else ''}")
+    else:
+        print("  caption: none (the video has no caption)")
+    if posted:
+        print(f"  posted_at: {posted} (from TikTok)")
+
+
 def get_audio(clip_path: Path, audio_dir: Path, force: bool) -> str:
     """Make the WAV for one clip. Returns "made" or "skipped"; raises ClipError."""
     try:
@@ -123,8 +170,16 @@ def get_audio(clip_path: Path, audio_dir: Path, force: bool) -> str:
 
     old = clip.get("audio_file")
     if old and (audio_dir / old).is_file() and not force:
-        print(f"{clip_id}: already has audio ({display_path(audio_dir / old)}). Skipped. Use --force to make it again.")
-        return "skipped"
+        if source.get("caption"):
+            print(f"{clip_id}: already has audio ({display_path(audio_dir / old)}). Skipped. "
+                  "Use --force to make it again.")
+            return "skipped"
+        print(f"{clip_id}: already has audio; reading the caption from TikTok (no download) ...")
+        posted = fill_from_tiktok(clip, ask_tiktok(url, None))
+        save_json(clip_path, clip)
+        print(f"{clip_id}: saved the caption")
+        print_tiktok_info(clip, posted)
+        return "made"
 
     print(f"{clip_id}: downloading {url} ...")
     target = audio_dir / f"{clip_id}.wav"
@@ -139,16 +194,11 @@ def get_audio(clip_path: Path, audio_dir: Path, force: bool) -> str:
         os.replace(part, target)
 
     clip["audio_file"] = target.name
-    posted = None
-    if not source.get("posted_at"):
-        posted = posted_date(info)
-        source["posted_at"] = posted
-        clip["source"] = source
+    posted = fill_from_tiktok(clip, info)
     save_json(clip_path, clip)
 
     print(f"{clip_id}: saved {display_path(target)} (16 kHz, mono, {seconds:.1f} s)")
-    if posted:
-        print(f"  posted_at: {posted} (from TikTok)")
+    print_tiktok_info(clip, posted)
     return "made"
 
 

@@ -24,6 +24,7 @@ This is the main file. Every stage adds to it. Start each new clip from `tvna_cl
     "url": "https://www.tiktok.com/@motokew/video/...",
     "platform": "tiktok",
     "creator": "@motokew",
+    "caption": "Tea time at Tea Kingdom 🍵 #phnompenh",
     "posted_at": "2026-10-22",
     "collected_at": "2026-11-08"
   },
@@ -188,7 +189,7 @@ Anything not filled yet stays `null`.
 | Stage | Who | Fields | Script (in `text-json/`) |
 |---|---|---|---|
 | 1. Collect data | Person | `clip_id`, `source` (url, platform, creator, posted_at, collected_at) | none, start from `tvna_clip_template.json` |
-| 2. Video to audio | Script | `audio_file` | in `audio-text/` |
+| 2. Video to audio | Script | `audio_file`, `source.caption` (the creator's TikTok caption, hashtags included; `null` if none), `source.posted_at` if empty | `stage2_get_audio.py` |
 | 3. Audio to transcript | Script + Gemini | `stt`. Person: `ground_truth` (test clips only) | in `audio-text/` |
 | 4. Transcript to fields | LLM + code | `extraction` and every place in `fields` (see below) | `extract_places_gemini.py` |
 | 5a. Remove duplicates | Script | moves duplicate clip files, adds `duplicate_of` | `dedupe_clips.py` |
