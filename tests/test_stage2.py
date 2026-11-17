@@ -217,10 +217,17 @@ p16c = clip("PP-017")
 code, out = run(p16c)
 check("16c empty caption saved as null, says so", load(p16c)["source"]["caption"] is None
       and "caption: none (the video has no caption)" in out, out)
+FakeYDL.seen_opts = None
+code, out = run(p16c)
+check("16c video with no caption, run again: skipped, TikTok not asked again", code == 0 and "Skipped" in out
+      and FakeYDL.seen_opts is None and "saved the caption" not in out, out)
 
 FakeYDL.caption = None
 p16d = clip("PP-018")
 run(p16d)
+c = load(p16d)
+del c["source"]["caption"]  # a clip made before captions existed
+p16d.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
 FakeYDL.mode = "fail"
 raw = p16d.read_bytes()
 code, out = run(p16d)

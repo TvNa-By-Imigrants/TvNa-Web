@@ -170,7 +170,8 @@ def get_audio(clip_path: Path, audio_dir: Path, force: bool) -> str:
 
     old = clip.get("audio_file")
     if old and (audio_dir / old).is_file() and not force:
-        if source.get("caption"):
+        # A saved null means "the video has no caption"; only clips made before captions lack the key.
+        if "caption" in source:
             print(f"{clip_id}: already has audio ({display_path(audio_dir / old)}). Skipped. "
                   "Use --force to make it again.")
             return "skipped"
