@@ -1,0 +1,76 @@
+{
+  "clip_id": "PP-002",
+  "extraction": {
+    "method": "llm",
+    "model": "gemini-3.6-flash",
+    "prompt_version": "v4"
+  },
+  "fields": [
+    {
+      "place_id": null,
+      "place_name": "Hanjang Coffee & Eatery",
+      "place_name_alt": [],
+      "category": "restaurant",
+      "sub_category": "Korean",
+      "price_range": null,
+      "area": null,
+      "area_description": "located in Toul Tompoung area",
+      "google_maps_url": null,
+      "opening_hours": null,
+      "speaker_opinion": "It is a good place serving both Korean and Western food as well as signature drinks, where almost everything tastes delicious. Standout dishes include bouncy fish cake soup, chewy and addictive Tteokbokki, flavorful Aglio e Olio pasta, Caesar Salad, Kimbap, and drinks like Strawberry Smoothie and Cappuccino.",
+      "menu_items": [
+        "fish cake soup",
+        "Tteokbokki",
+        "Aglio e Olio pasta",
+        "Caesar Salad",
+        "Kimbap",
+        "Strawberry Smoothie",
+        "Cappuccino",
+        "viral Korean milk"
+      ],
+      "completeness": 0.67,
+      "missing_fields": [
+        "area"
+      ],
+      "verification_status": "needs_review",
+      "cleaned_by": null,
+      "cleaner_note": null,
+      "notes": "They also serve cold drinks at night.",
+      "confidence": {
+        "place_name": "high",
+        "category": "high",
+        "price_range": null,
+        "area": null
+      },
+      "missing_reasons": {
+        "price_range": "not mentioned",
+        "area": "only neighborhood Toul Tompoung is mentioned, no district named",
+        "opening_hours": "not mentioned"
+      },
+      "evidence_text": "But this time it is a Korean cuisine called Hanjang Coffee & Eatery.",
+      "segment_ids": [
+        4,
+        6,
+        8,
+        9,
+        10,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ],
+      "flags": []
+    }
+  ]
+}

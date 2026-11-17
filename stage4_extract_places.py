@@ -2,6 +2,8 @@
 """Stage 4: transcript -> fields, with the Gemini API.
 Reads a clip file made in stages 1-3, uses stt.transcript, and writes only "extraction"
 and "fields" back into the same file.
+A copy of the places as Gemini gave them goes to data/gemini_answers/<clip_id>.json. Nobody edits it,
+so after the team review we can see what Gemini got wrong.
 place_id stays null here; stage5c_match_places.py sets it.
 Needs GEMINI_API_KEY in .env (see README.md).
 
@@ -21,6 +23,7 @@ from pydantic import BaseModel
 
 from tvna_common import (
     CATEGORIES,
+    GEMINI_ANSWERS_DIR,
     NO_SPEECH,
     ClipError,
     completeness,
@@ -269,7 +272,7 @@ def merge_record(first: dict, later: dict) -> None:
                  verification_status=verification_status(first, score))
 
 
-def extract_clip(client, path: Path, models: List[str], force: bool) -> str:
+def extract_clip(client, path: Path, models: List[str], force: bool, answers_dir: Path = GEMINI_ANSWERS_DIR) -> str:
     """Find the places in one clip. Returns "made" or "skipped"; raises ClipError."""
     try:
         clip = load_json(path)
@@ -319,6 +322,8 @@ def extract_clip(client, path: Path, models: List[str], force: bool) -> str:
             updated[key] = value
     updated["extraction"] = extraction
     updated["fields"] = records
+    answers_dir.mkdir(parents=True, exist_ok=True)
+    save_json(answers_dir / f"{clip_id}.json", {"clip_id": clip_id, "extraction": extraction, "fields": records})
     save_json(path, updated)
 
     print(f"{clip_id}: {len(records)} place{'' if len(records) == 1 else 's'} found ({extraction['model']})")
@@ -332,6 +337,7 @@ def main():
     ap.add_argument("clips", nargs="+", type=Path, help="Clip files made in stages 1-3, e.g. data/clips/PP-002.json")
     ap.add_argument("--model", default=MODELS[0], help=f"Gemini model to try first (default {MODELS[0]})")
     ap.add_argument("--force", action="store_true", help="Redo clips whose fields are already filled")
+    ap.add_argument("--answers-dir", type=Path, default=GEMINI_ANSWERS_DIR)
     args = ap.parse_args()
     models = models_in_order(args.model, MODELS)
 
@@ -340,7 +346,7 @@ def main():
     except ValueError:
         sys.exit("GEMINI_API_KEY is missing. Add it to .env (see README, Setup). Nothing changed.")
 
-    run_each(args.clips, lambda path: extract_clip(client, path, models, args.force),
+    run_each(args.clips, lambda path: extract_clip(client, path, models, args.force, args.answers_dir),
              "python stage5a_dedupe_clips.py data/clips/*.json")
 
 

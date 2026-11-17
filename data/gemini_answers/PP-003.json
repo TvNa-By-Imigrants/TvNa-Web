@@ -1,0 +1,59 @@
+{
+  "clip_id": "PP-003",
+  "extraction": {
+    "method": "llm",
+    "model": "gemini-3.6-flash",
+    "prompt_version": "v4"
+  },
+  "fields": [
+    {
+      "place_id": null,
+      "place_name": "ALWAYS selfie booth",
+      "place_name_alt": [],
+      "category": "entertainment",
+      "sub_category": "Selfie booth",
+      "price_range": null,
+      "area": null,
+      "area_description": null,
+      "google_maps_url": null,
+      "opening_hours": null,
+      "speaker_opinion": "កន្លែងថតរូបនេះមានការ update ថ្មី ដោយមានកន្លែងអង្គុយរង់ចាំ អាចជ្រើសរើស frame និង background តាមចិត្ត មានកញ្ចក់ ភ្លើង ម៉ាស៊ីនកៀបសក់ និង makeup សម្រាប់រៀបចំខ្លួន ព្រមទាំងមាន head accessories យ៉ាងច្រើន និងបន្ទប់ថតរូបធំទូលាយស្អាត។",
+      "menu_items": null,
+      "completeness": 0.67,
+      "missing_fields": [
+        "area"
+      ],
+      "verification_status": "needs_review",
+      "cleaned_by": null,
+      "cleaner_note": null,
+      "notes": "ហាងកំពុងរៀបចំបន្ទប់ថតរូបថ្មីមួយទៀតនៅជាប់បន្ទប់ទី១។",
+      "confidence": {
+        "place_name": "high",
+        "category": "high",
+        "price_range": null,
+        "area": null
+      },
+      "missing_reasons": {
+        "price_range": "not mentioned",
+        "area": "not mentioned",
+        "opening_hours": "not mentioned",
+        "area_description": "not mentioned",
+        "menu_items": "not mentioned"
+      },
+      "evidence_text": "Hello guys, welcome to ALWAYS selfie booth.",
+      "segment_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "flags": []
+    }
+  ]
+}

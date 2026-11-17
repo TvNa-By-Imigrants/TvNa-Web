@@ -46,6 +46,8 @@ _Last updated: 2026-11-16_
 - Stages 3 and 4 get the known names and the TikTok caption as hints.
 - The first ~10 clips the team approves become a test set. A change to the prompt or model stays only if the score goes up.
 
+Steps: 1. keep Gemini's first answer ✅ · 2. save the TikTok caption · 3. save the team's fixes · 4. hints for Gemini · 5. test score
+
 ---
 
 ## Setup (once per computer)
@@ -142,6 +144,7 @@ TvNa-Web/
 │   ├── clips/                     ← one file per video: PP-001.json, PP-002.json …
 │   │   └── duplicates/            ← clips of a video we already have
 │   ├── audio/                     ← WAV files made by stage 2 (not in git)
+│   ├── gemini_answers/            ← stage 4's places exactly as Gemini gave them (never edit)
 │   ├── places.json                ← made by stage 5c
 │   └── final_dataset.json         ← made by stage 6
 ├── templates/                     ← empty JSON templates for every file type
@@ -255,6 +258,8 @@ python stage4_extract_places.py data/clips/PP-002.json
 ```
 
 Gemini reads the transcript and lists each place with what was said about it (category, menu, opinion …). The code then checks the district against `data/areas.json` and gives each place a status: `auto_added`, `needs_review` or `rejected`. Same busy handling as stage 3 (`gemini-3.6-flash`, backup `gemini-3.8-flash`). A `[no speech]` clip is skipped.
+
+A copy of Gemini's answer is also saved in `data/gemini_answers/PP-002.json`. **Never edit it:** after the team review, it shows what Gemini got wrong (for the improvement loop).
 
 Gemini reads up to 60 sentences at once, so a normal TikTok is read whole. A longer transcript is read in parts, and details about the same place from later parts are added to it.
 

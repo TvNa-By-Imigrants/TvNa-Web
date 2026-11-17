@@ -18,6 +18,7 @@ AREAS_FILE = DATA_DIR / "areas.json"
 PLACES_FILE = DATA_DIR / "places.json"
 CLIPS_DIR = DATA_DIR / "clips"
 AUDIO_DIR = DATA_DIR / "audio"
+GEMINI_ANSWERS_DIR = DATA_DIR / "gemini_answers"  # stage 4's places exactly as Gemini gave them, never edited
 
 CATEGORIES = [
     "restaurant", "cafe", "bar", "street_food",
