@@ -50,7 +50,7 @@ _Last updated: 2026-11-17_
 - Stages 3 and 4 get the known names and the TikTok caption as hints.
 - The first ~10 clips the team approves become a test set. A change to the prompt or model stays only if the score goes up.
 
-Steps: 1. keep Gemini's first answer ✅ · 2. the TikTok caption (saved by stage 2 ✅ · used by stage 4, which keeps the caption's name and the spoken name ✅ · one name on the website) · 3. save the team's fixes · 4. hints for Gemini · 5. test score
+Steps: 1. keep Gemini's first answer ✅ · 2. the TikTok caption (saved by stage 2 ✅ · used by stage 4, which keeps the caption's name and the spoken name ✅ · one name on the website ✅) · 3. save the team's fixes · 4. hints for Gemini · 5. test score
 
 ---
 
@@ -368,6 +368,16 @@ Built and tested. The commands are in [How to run](#how-to-run).
 
 - **5a** again moves nothing. A clip file that is gone (already moved) is listed under `problems`, not an error.
 - **6** rebuilds `data/final_dataset.json` from scratch each time, so the same clips give the same file. Empty text (`""`) is written as `null`.
+- **6** publishes **one name per place**: `place_name` from `data/places.json`. Other names (`aliases`, and the clips' `place_name_alt`) stay in the pipeline for matching only, so a misheard name like "ALWAYS selfie booth" stays off the website, as long as the team picks the right name in 5b before 5c (5c names a new place after its clip). To change a place's name later, edit `place_name` in places.json (field guide, section 6 "Name"). A place with no name gets `null` and a warning; a `verified` clip that names the place differently also gets a warning.
+
+> **Website team:** since 2026-11-17, `final_dataset.json` has **no `place_name_alt`** field. Use `place_name` only. The full field list is in `templates/tvna_final_dataset_template.json`.
+
+Real run on PP-002 and PP-003 (copies, through 5c and 6):
+
+| Clip | Website name (`place_name`) | `aliases` in places.json (matching only) |
+|---|---|---|
+| PP-002 | Hanjan Coffee | Hanjan Coffee, Hanjang Coffee & Eatery |
+| PP-003 | Luv selfie booth | Luv selfie booth, ALWAYS selfie booth |
 
 ---
 
@@ -384,5 +394,5 @@ Built and tested. The commands are in [How to run](#how-to-run).
 
 - [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md) explains every field, who fills it, and the value rules. Note: the guide still uses the old script names (for example `extract_places_gemini.py`, now `stage4_extract_places.py`), and its section 8 still says "exact match only" (see Stage 5c above). It will be updated.
 - [`docs/decisions.md`](docs/decisions.md) lists key decisions and why.
-- [`docs/tvna_data_model.png`](docs/tvna_data_model.png) shows how the JSON files connect.
+- [`docs/tvna_data_model.png`](docs/tvna_data_model.png) shows how the JSON files connect. The picture still shows `place_name_alt` in final_dataset.json; [`docs/tvna_data_model.mmd`](docs/tvna_data_model.mmd) is up to date.
 - [`docs/tvna_pipeline_overview.png`](docs/tvna_pipeline_overview.png) shows the stages at a glance.

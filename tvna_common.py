@@ -130,6 +130,11 @@ def as_list(value) -> list:
     return value if isinstance(value, list) else [value]
 
 
+def text_or_none(value) -> Optional[str]:
+    """Text without outside spaces. "", only spaces, null or a value that is not text (typed by hand) -> None."""
+    return (value.strip() or None) if isinstance(value, str) else None
+
+
 def match_districts(values, areas: List[dict]) -> Tuple[List[str], List[str]]:
     """Split values into exact district names (no repeats) and values that are not districts."""
     matched, unmatched = [], []

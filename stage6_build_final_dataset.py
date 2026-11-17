@@ -3,7 +3,8 @@
 Joins the clip files to places.json by place_id. Run after stage5c_match_places.py.
 Values that can differ between clips (category, price_range, opening_hours,
 area_description, menu_items) are kept as lists of unique values. An empty Maps link, opinion or
-creator ("") is written as null.
+creator ("", or only spaces) is written as null. Each place gets one name, place_name from places.json; other names
+(aliases, place_name_alt) stay in the pipeline for matching and are not published.
 
 Usage:
     python stage6_build_final_dataset.py data/clips/*.json   # -> data/final_dataset.json
@@ -15,12 +16,13 @@ from tvna_common import (
     AREAS_FILE,
     DATA_DIR,
     PLACES_FILE,
-    as_list,
     load_areas,
     load_json,
     match_districts,
+    name_key,
     norm,
     save_json,
+    text_or_none,
 )
 
 LIST_FIELDS = ["category", "price_range", "area", "area_description", "opening_hours", "menu_items"]
@@ -34,16 +36,14 @@ def add_unique(values, new):
 
 
 def new_record(place):
-    main_name = norm(place["place_name"])
     rec = {
         "place_id": place["place_id"],
-        "place_name": place["place_name"],
-        "place_name_alt": [a for a in as_list(place.get("aliases")) if norm(a) and norm(a) != main_name],
+        "place_name": text_or_none(place.get("place_name")),
         "category": [],
         "price_range": [],
         "area": [],
         "area_description": [],
-        "google_maps_url": place.get("google_maps_url") or None,
+        "google_maps_url": text_or_none(place.get("google_maps_url")),
         "opening_hours": [],
         "menu_items": [],
         "popularity": 0,
@@ -70,7 +70,7 @@ def main():
         name = Path(path).name
         clip_id = clip.get("clip_id") or Path(path).stem
         source = clip.get("source") or {}
-        creator = (source.get("creator") or "").strip() or None
+        creator = text_or_none(source.get("creator"))
         if not creator:
             warnings.append(f"{name}: no creator, so this clip is not counted in popularity")
 
@@ -84,23 +84,30 @@ def main():
             if place_id not in records:
                 records[place_id] = new_record(places[place_id])
             rec = records[place_id]
+            clip_name = text_or_none(f.get("place_name"))
+            if (f.get("verification_status") == "verified" and clip_name and rec["place_name"]
+                    and name_key(clip_name) != name_key(rec["place_name"])):
+                warn = (f'{name}: the team checked the name "{clip_name}", but the website shows '
+                        f'"{rec["place_name"]}" ({place_id}). To change it, edit place_name in places.json')
+                if warn not in warnings:
+                    warnings.append(warn)
 
             for key in LIST_FIELDS:
                 add_unique(rec[key], f.get(key))
 
+            opinion = text_or_none(f.get("speaker_opinion"))
             mention = next((m for m in rec["mentions"] if m["clip_id"] == clip_id), None)
             if mention:
-                # Same place named twice in one clip: one mention, opinions joined.
-                opinions = [mention["speaker_opinion"], f.get("speaker_opinion")]
-                mention["speaker_opinion"] = "; ".join(o for o in opinions if o) or None
+                # Same place named twice in one clip: one mention, different opinions joined.
+                old = mention["speaker_opinion"]
+                if opinion and norm(opinion) not in {norm(o) for o in (old or "").split("; ")}:
+                    mention["speaker_opinion"] = f"{old}; {opinion}" if old else opinion
             else:
-                rec["mentions"].append({
-                    "clip_id": clip_id,
-                    "creator": creator,
-                    "speaker_opinion": f.get("speaker_opinion") or None,
-                })
+                rec["mentions"].append({"clip_id": clip_id, "creator": creator, "speaker_opinion": opinion})
 
     for rec in records.values():
+        if not rec["place_name"]:
+            warnings.append(f"{rec['place_id']}: no place_name in places.json, so the website shows no name")
         rec["popularity"] = len({norm(m["creator"]) for m in rec["mentions"] if m["creator"]})
         rec["area"], not_districts = match_districts(rec["area"], areas)
         for value in not_districts:

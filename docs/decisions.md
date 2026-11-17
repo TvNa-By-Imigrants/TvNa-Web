@@ -29,9 +29,16 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ## 2026-11-17: One name on the website
 
-**Decision:** `final_dataset.json` gets one `place_name` per place, with no `place_name_alt` (plan step D). Other names stay as `aliases` in `places.json`, for matching future clips.
+**Decision:** `final_dataset.json` gets one `place_name` per place, with no `place_name_alt` (plan step D, done). Other names stay as `aliases` in `places.json`, for matching future clips.
+
+- The published name is `place_name` in places.json. Stage 5c sets it from the clip that creates the place, so the team picks the right name in 5b before 5c. To change it later, edit places.json; the old name is already in `aliases`.
+- An empty name is published as `null` with a warning. Stage 6 never takes an alias instead, because an alias may be a misheard name.
+- Stage 6 warns when a `verified` clip names the place differently from places.json.
+- Limit: 5c also names places from clips not reviewed yet, so the team must pick the name in 5b before running 5c.
 
 **Why:** a misheard name like "ALWAYS selfie booth" helps matching but must not be shown to visitors.
+
+**Note for the website team:** the `place_name_alt` field is gone from `final_dataset.json`.
 
 ## 2026-11-17: Caption now, counts later
 

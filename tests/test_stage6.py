@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 PIPE = Path(__file__).resolve().parent.parent
@@ -57,6 +58,9 @@ def run():
             s6.main()
         except SystemExit as e:
             code = e.code if isinstance(e.code, int) else 1
+        except Exception:
+            code = "crashed"
+            out.write(traceback.format_exc())
     return code, out.getvalue()
 
 write(PLACES, [
@@ -113,6 +117,16 @@ check("9 lists: values from every clip, no repeats, areas only real districts",
       r1.get("price_range") == ["$1-3"] and r1.get("category") == ["cafe"] and r1.get("area") == ["Tuol Kouk"]
       and "area 'Toul Kork' is not a district" in out, (r1, out))
 
+# D. one name per place on the website
+template = load(PIPE / "templates/tvna_final_dataset_template.json")[0]
+check("D1 one name: place_name from places.json, no place_name_alt, aliases not published",
+      r1.get("place_name") == "Tea Kingdom" and all("place_name_alt" not in r and "aliases" not in r for r in data)
+      and "ធីឃីងដម" not in text, r1)
+check("D2 every record has exactly the template's keys, in the same order",
+      bool(data) and all(list(r) == list(template) for r in data)
+      and all(list(m) == list(template["mentions"][0]) for r in data for m in r["mentions"]),
+      (list(template), [list(r) for r in data]))
+
 raw_out = OUT.read_bytes() if OUT.exists() else b""
 raw_in = {p: p.read_bytes() for p in [PLACES, *CLIPS.glob("*.json")]}
 code2, out2 = run()
@@ -135,14 +149,69 @@ for n, creator in [(1, "@a"), (2, "@b"), (3, "   ")]:
 code, out = run()
 rec = {r["place_id"]: r for r in load(OUT)} if OUT.exists() else {}
 r1, r2 = rec.get("tvna_p_0001", {}), rec.get("tvna_p_0002", {})
-check('S1 aliases with "" / null / a typed text: left out, kept whole', r1.get("place_name_alt") == ["TK"]
-      and r2.get("place_name_alt") == ["Brown"], (r1, r2))
+check('S1 aliases with "" / null / a typed text: no crash, never published',
+      code == 0 and r1.get("place_name") == "Tea Kingdom" and r2.get("place_name") == "Brown Coffee"
+      and "place_name_alt" not in r1 and "aliases" not in r1 and "TK" not in OUT.read_text(encoding="utf-8"), (r1, r2))
 check("S2 clips with no clip_id stay separate mentions (file name used), popularity counts both creators",
       [m["clip_id"] for m in r1.get("mentions", [])] == ["PP-101", "PP-102", "PP-103"] and r1.get("popularity") == 2,
       r1)
 m3 = next((m for m in r1.get("mentions", []) if m["clip_id"] == "PP-103"), {})
 check('S3 creator of only spaces -> null, warned, not counted',
       "creator" in m3 and m3["creator"] is None and "PP-103.json: no creator" in out, (r1, out))
+
+# N. place_name in places.json edited by hand: filled with spaces / null / "" / missing / a list / a number
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+names = {"tvna_p_0001": " Tea Kingdom ", "tvna_p_0002": None, "tvna_p_0003": "", "tvna_p_0004": MISSING,
+         "tvna_p_0005": ["Wat Botum Park"], "tvna_p_0006": 5}
+nameless = ("tvna_p_0002", "tvna_p_0003", "tvna_p_0004", "tvna_p_0005", "tvna_p_0006")
+write(PLACES, [drop_missing({"place_id": i, "place_name": n, "aliases": ["Old Name"], "area": []}) for i, n in names.items()])
+clip("PP-201", [place(place_id=i) for i in names])
+code, out = run()
+rec = {r["place_id"]: r for r in load(OUT)} if OUT.exists() else {}
+check("N1 place_name with spaces is trimmed",
+      code == 0 and rec.get("tvna_p_0001", {}).get("place_name") == "Tea Kingdom", (code, out, rec))
+check('N2 place_name null / "" / missing / a list / a number: no crash, null (not an alias), warned',
+      code == 0 and all(i in rec and rec[i]["place_name"] is None for i in nameless)
+      and all(f"{i}: no place_name in places.json" in out for i in nameless)
+      and "Old Name" not in OUT.read_text(encoding="utf-8") and "tvna_p_0001: no place_name" not in out, (out, rec))
+raw_out = OUT.read_bytes()
+code2, out2 = run()
+check("N3 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
+
+# W. spaces-only text, repeated opinions, a name the team checked that differs from places.json
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+write(PLACES, [{"place_id": "tvna_p_0001", "place_name": "Luv selfie booth", "aliases": ["ALWAYS selfie booth"],
+                "area": [], "google_maps_url": "   "},
+               {"place_id": "tvna_p_0002", "place_name": "Brown Coffee", "area": [], "google_maps_url": 7}])
+clip("PP-301", [place(place_id="tvna_p_0001", speaker_opinion="Good tea"),
+                place(place_id="tvna_p_0001", speaker_opinion=" good  TEA "),
+                place(place_id="tvna_p_0001", speaker_opinion="Nice staff")], creator=" @a ")
+clip("PP-302", [place(place_id="tvna_p_0002", place_name="Brown Coffee", speaker_opinion="   ")], creator=5)
+clip("PP-303", [place(place_id="tvna_p_0001", place_name="ALWAYS selfie booth", verification_status="verified"),
+                place(place_id="tvna_p_0001", place_name="ALWAYS selfie booth", verification_status="verified")])
+clip("PP-304", [place(place_id="tvna_p_0001", place_name="Always Selfie-Booth", verification_status="needs_review")])
+clip("PP-305", [place(place_id="tvna_p_0001", place_name="LUV Selfie Booth", verification_status="verified")])
+code, out = run()
+rec = {r["place_id"]: r for r in load(OUT)} if OUT.exists() else {}
+r1, r2 = rec.get("tvna_p_0001", {}), rec.get("tvna_p_0002", {})
+m1 = {m["clip_id"]: m for m in r1.get("mentions", [])}
+check("W1 Maps link of only spaces, or a number: null",
+      code == 0 and r1.get("google_maps_url") is None and r2.get("google_maps_url") is None, (code, out, r1, r2))
+check("W2 opinion of only spaces -> null; creator with spaces trimmed; creator typed as a number -> null",
+      r2.get("mentions", [{}])[0].get("speaker_opinion", "x") is None and m1.get("PP-301", {}).get("creator") == "@a"
+      and r2.get("mentions", [{}])[0].get("creator", "x") is None, (r1, r2))
+check("W3 same place twice in one clip: the same opinion is not repeated, a different one is joined",
+      m1.get("PP-301", {}).get("speaker_opinion") == "Good tea; Nice staff", m1.get("PP-301"))
+warn = 'PP-303.json: the team checked the name "ALWAYS selfie booth", but the website shows "Luv selfie booth"'
+check("W4 verified clip names the place differently from places.json: warned once",
+      out.count(warn) == 1, out)
+check("W5 no warning for an unchecked clip, or the same name in other capitals",
+      "PP-304.json: the team checked" not in out and "PP-305.json: the team checked" not in out, out)
+raw_out = OUT.read_bytes() if OUT.exists() else b""
+code2, out2 = run()
+check("W6 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)
