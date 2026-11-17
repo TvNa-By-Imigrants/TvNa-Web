@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Stage 3: WAV -> transcript, with Gemini. Writes only "stt" in the clip file.
 Khmer is written in Khmer script and English in English letters, without translation.
+When the clip has a TikTok caption (source.caption, from stage 2), Gemini uses it only to spell names
+it hears; the transcript stays what is said. A warning is printed if caption sentences show up in it.
 
 Usage:
     python stage3_transcribe.py data/clips/PP-002.json
@@ -8,6 +10,7 @@ Usage:
     python stage3_transcribe.py data/clips/PP-002.json --force      # transcribe again
 """
 import argparse
+import re
 import sys
 import unicodedata
 import wave
@@ -24,6 +27,7 @@ from tvna_common import (
     generate_with_backup,
     load_json,
     models_in_order,
+    name_key,
     run_each,
     save_json,
     skip_reviewed,
@@ -48,6 +52,32 @@ Rules:
 - Do not write song lyrics or background music.
 - If nobody speaks, reply only: [no speech]"""
 
+CAPTION_BLOCK = """
+
+TikTok caption written by the creator (it may name the place, dishes or people):
+<<<
+{caption}
+>>>
+Use the caption only to spell names you actually hear in the audio. Never write caption text that is not spoken."""
+# A caption sentence at least this long (letters only, no spaces) found in the transcript is worth a check.
+COPIED_MIN_CHARS = 25
+
+
+def prompt_for(caption) -> tuple:
+    """(prompt, settings): the caption is added only when the clip has one."""
+    if not caption:
+        return PROMPT, SETTINGS
+    return PROMPT + CAPTION_BLOCK.format(caption=caption), SETTINGS + " + caption"
+
+
+def copied_from_caption(caption, transcript: str) -> list:
+    """Caption sentences that appear word for word in the transcript (ignoring spaces, case and emoji)."""
+    if not caption:
+        return []
+    said = name_key(transcript)
+    return [s.strip() for s in re.split(r"[.!?\n]+", caption)
+            if len(name_key(s)) >= COPIED_MIN_CHARS and name_key(s) in said]
+
 
 def find_wav(clip: dict, audio_dir: Path, clip_path: Path) -> Path:
     name = clip.get("audio_file")
@@ -70,7 +100,7 @@ def seconds(wav: Path) -> float:
         raise ClipError(f"{display_path(wav)} is not a valid WAV ({e}). Run stage 2 again with --force.") from None
 
 
-def transcribe(client, wav: Path, models: list) -> tuple:
+def transcribe(client, wav: Path, models: list, prompt: str = PROMPT) -> tuple:
     """Return (transcript, model used). Tries each model in turn while the earlier ones are busy."""
     uploaded = None
     try:
@@ -81,7 +111,7 @@ def transcribe(client, wav: Path, models: list) -> tuple:
                 audio = uploaded = client.files.upload(file=str(wav), config=types.UploadFileConfig(mime_type="audio/wav"))
             except Exception as e:
                 raise ClipError(f"Couldn't upload the audio to Gemini: {e}") from None
-        resp, model = generate_with_backup(client, models, [PROMPT, audio])
+        resp, model = generate_with_backup(client, models, [prompt, audio])
         text = resp.text or ""
     finally:
         if uploaded:
@@ -112,10 +142,13 @@ def transcribe_clip(client, clip_path: Path, audio_dir: Path, models: list, forc
         return "skipped"
 
     wav = find_wav(clip, audio_dir, clip_path)
-    print(f"{clip_id}: transcribing {display_path(wav)} ({seconds(wav):.1f} s) with {models[0]} ...", flush=True)
-    text, model = transcribe(client, wav, models)
+    caption = (clip.get("source") or {}).get("caption")
+    prompt, settings = prompt_for(caption)
+    print(f"{clip_id}: transcribing {display_path(wav)} ({seconds(wav):.1f} s) with {models[0]}"
+          f"{', using the caption for names' if caption else ''} ...", flush=True)
+    text, model = transcribe(client, wav, models, prompt)
 
-    clip["stt"] = {"tool": "gemini", "model": model, "settings": SETTINGS, "transcript": text}
+    clip["stt"] = {"tool": "gemini", "model": model, "settings": settings, "transcript": text}
     # Old places point to sentence numbers of the old transcript, so stage 4 must find them again.
     had_places = clip.get("fields") is not None
     if had_places:
@@ -134,6 +167,8 @@ def transcribe_clip(client, clip_path: Path, audio_dir: Path, models: list, forc
         print(f"  {line}")
     if len(lines) > PREVIEW_LINES:
         print("  ...")
+    for sentence in copied_from_caption(caption, text):
+        print(f"  check it: the transcript repeats the caption (fine if the speaker read it out): \"{sentence}\"")
     return "made"
 
 

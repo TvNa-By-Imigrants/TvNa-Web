@@ -306,6 +306,47 @@ check("16d mixed: one redone, the reviewed one skipped",
       code == 0 and "Done: 1 made, 1 skipped, 0 failed" in out and len(FAKE.models.calls) == 1
       and load(p16e)["fields"][0]["cleaned_by"] == "Sok", out)
 
+# 17. TikTok caption: used only to spell names
+CAPTION = "Comfortable and unique, best quality best memories.Welcome to Luv selfie booth 😉📸 #luvselfiebooth #IFL"
+SOURCE = {"url": "https://www.tiktok.com/@tester/video/1", "platform": "tiktok", "creator": "@tester",
+          "caption": CAPTION, "posted_at": None, "collected_at": None}
+make_wav("PP-030.wav")
+p17 = clip("PP-030", source=SOURCE)
+reset()
+code, out = run(p17)
+model, contents, config = FAKE.models.calls[-1]
+check("17a caption in the prompt, with the spelling-only rule", contents[0].startswith(s3.PROMPT)
+      and CAPTION in contents[0] and "only to spell names you actually hear" in contents[0]
+      and "Never write caption text that is not spoken" in contents[0], contents[0])
+check("17a stt.settings records the caption", load(p17)["stt"]["settings"] == "km+en code-switching prompt v1 + caption",
+      load(p17)["stt"])
+check("17a says it uses the caption, no warning for a normal transcript",
+      "using the caption for names" in out and "check it" not in out, out)
+
+make_wav("PP-031.wav")
+p17b = clip("PP-031")
+reset()
+code, out = run(p17b)
+check("17b no caption: prompt and settings exactly as before",
+      FAKE.models.calls[-1][1][0] == s3.PROMPT and load(p17b)["stt"]["settings"] == "km+en code-switching prompt v1"
+      and "using the caption" not in out, out)
+
+reset(default="Hello guys\nComfortable and unique, best quality, best memories!\nThank you")
+code, out = run(p17, "--force")
+check("17c caption sentence copied into the transcript: warning (punctuation/case ignored)",
+      'check it: the transcript repeats the caption (fine if the speaker read it out): '
+      '"Comfortable and unique, best quality best memories"' in out, out)
+
+reset(default="Hello guys\nWelcome to Luv selfie booth\nThank you")
+code, out = run(p17, "--force")
+check("17d only the name in common: no warning", "check it" not in out, out)
+
+reset(default="សួស្តី\nហាងនេះស្អាតណាស់ ហើយតម្លៃថោកទៀតផង\nបាយ")
+km = clip("PP-032", source=dict(SOURCE, caption="ហាងនេះស្អាតណាស់ ហើយតម្លៃថោកទៀតផង 📸"))
+make_wav("PP-032.wav")
+code, out = run(km)
+check("17e Khmer caption sentence copied (no spaces between words): warning too", "check it" in out, out)
+
 # 15. no API key
 def no_key(**kw):
     raise ValueError("No API key was provided.")

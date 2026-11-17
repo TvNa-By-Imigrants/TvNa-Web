@@ -47,7 +47,7 @@ _Last updated: 2026-11-16_
 - Stages 3 and 4 get the known names and the TikTok caption as hints.
 - The first ~10 clips the team approves become a test set. A change to the prompt or model stays only if the score goes up.
 
-Steps: 1. keep Gemini's first answer ✅ · 2. the TikTok caption (A. saved by stage 2 ✅ · B. used by stage 3 · C. used by stage 4 · D. one name on the website) · 3. save the team's fixes · 4. hints for Gemini · 5. test score
+Steps: 1. keep Gemini's first answer ✅ · 2. the TikTok caption (A. saved by stage 2 ✅ · B. used by stage 3 ✅ · C. used by stage 4 · D. one name on the website) · 3. save the team's fixes · 4. hints for Gemini · 5. test score
 
 ---
 
@@ -251,6 +251,8 @@ If it ends with `Gemini is busy … Run the same command again later`, do that. 
 
 A video with only music (nobody speaks) gets the transcript `[no speech]`. Song lyrics are not written down.
 
+**The caption helps with names.** When the clip has a caption (from stage 2), Gemini uses it to spell the names it hears, e.g. "Luv selfie booth" instead of a misheard "ALWAYS selfie booth". The transcript stays only what is said: a name that is only in the caption is not added (stage 4 finds it there). `stt.settings` ends in `+ caption` when it was used. If a whole caption sentence shows up in the transcript, you'll see `check it: the transcript repeats the caption …`: listen to the video, it's fine if the speaker really read it out.
+
 With `--force`, the clip's old places are cleared too (they point to sentences of the old transcript), so run stage 4 again.
 
 **Test it yourself:**
@@ -261,6 +263,7 @@ With `--force`, the clip's old places are cleared too (they point to sentences o
 | The same command again | `already has a transcript. Skipped.` |
 | A clip with no WAV | `No audio … Run stage 2 first` |
 | `--force` on a clip that has places | `old places cleared … Stage 4 will find them again.` |
+| A clip with a caption | `… using the caption for names …`. Names in the transcript are spelled like the caption |
 
 ---
 
