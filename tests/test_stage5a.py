@@ -90,6 +90,42 @@ code, out = run(CLIPS / "PP-001.json", CLIPS / ".." / "clips" / "PP-001.json", *
 check("4 same file given twice: not moved, nothing changed", code == 0 and "moved (0)" in out and snapshot() == before,
       out)
 
+# C. a copied file ("PP-004 copy.json" sorts before "PP-004.json") and clip_id clashes
+shutil.rmtree(CLIPS)
+CLIPS.mkdir()
+def copy_of(original, name, **over):
+    c = load(original) | over
+    p = CLIPS / name
+    p.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
+orig = clip("PP-004", VIDEO)
+copy_of(orig, "PP-004 copy.json")
+nid = clip("PP-030", "https://www.tiktok.com/@tester/video/7000000000000000030")
+copy_of(nid, "aaa no id.json", clip_id=None)
+copy_of(nid, "aab empty id.json", clip_id="")
+c = load(nid); del c["clip_id"]
+(CLIPS / "aac missing id.json").write_text(json.dumps(c), encoding="utf-8")
+copy_of(nid, "aad list id.json", clip_id=["PP-030"])
+clip("PP-040", "https://www.tiktok.com/@a/video/7000000000000000040")
+copy_of(CLIPS / "PP-040.json", "PP-040 b.json", source={"url": "https://www.tiktok.com/@b/video/7000000000000000041"})
+code, out = run()
+moved = sorted(p.name for p in DUPS.glob("*.json"))
+check("C1 copy of PP-004.json: the copy is moved, PP-004.json kept, told it's probably a copied file",
+      code == 0 and (CLIPS / "PP-004.json").exists() and not (CLIPS / "PP-004 copy.json").exists()
+      and "PP-004 copy.json -> duplicates/ (same video as PP-004.json; same clip_id, so probably a copied file)" in out
+      and load(DUPS / "PP-004 copy.json").get("duplicate_of") == "PP-004", (moved, out))
+check("C2 copies with clip_id null / \"\" / missing / a list: PP-030.json kept, copies moved with duplicate_of PP-030",
+      (CLIPS / "PP-030.json").exists() and moved == ["PP-004 copy.json", "aaa no id.json", "aab empty id.json",
+                                                     "aac missing id.json", "aad list id.json"]
+      and all(load(DUPS / n).get("duplicate_of") == "PP-030" for n in moved[1:]), (moved, out))
+check("C3 same clip_id, different videos: listed under problems, nothing moved",
+      "PP-040 b.json, PP-040.json: same clip_id PP-040 but different videos" in out
+      and (CLIPS / "PP-040.json").exists() and (CLIPS / "PP-040 b.json").exists(), out)
+before = snapshot()
+code, out2 = run()
+check("C4 2nd run: nothing moved, no file changed (the clip_id problem is listed again)",
+      code == 0 and "moved (0)" in out2 and snapshot() == before and "same clip_id PP-040" in out2, out2)
+
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(0 if all(results) else 1)

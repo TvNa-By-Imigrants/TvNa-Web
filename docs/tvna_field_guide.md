@@ -310,7 +310,8 @@ The name only counts when stage 5c **creates** the place in places.json. For a p
 The same video must not be counted twice in `popularity`.
 
 - **Same video** = same video id in `source.url` (TikTok `/video/<number>`, YouTube, Instagram reel), or the same address for other links.
-- The first clip by file name is kept. The others move to `clips/duplicates/` with `"duplicate_of": "<kept clip_id>"`.
+- The clip whose file name is its `clip_id` is kept (`PP-004.json`, not a copy like `PP-004 copy.json`); among several, the first by file name. The others move to `clips/duplicates/` with `"duplicate_of": "<kept clip_id>"`.
+- Two clips with the same `clip_id` but different videos are listed as a problem: give one a new PP number (`clip_id` and file name).
 - Nothing is deleted. To undo, move the file back.
 - Only the URL is checked, not the transcript.
 - Short links (`vt.tiktok.com/...`) are not opened. A short link and a full link to the same video are **not** caught. Paste the full link when you can.

@@ -373,6 +373,7 @@ Next: python stage6_build_final_dataset.py data/clips/*.json
 
 Built and tested. The commands are in [How to run](#how-to-run).
 
+- **5a** keeps the clip whose file name is its `clip_id` (`PP-004.json`), so a copied file like `PP-004 copy.json` is the one moved: `PP-004 copy.json -> duplicates/ (same video as PP-004.json; same clip_id, so probably a copied file)`. Two clips with the same `clip_id` but different videos are listed under `problems` (give one a new PP number).
 - **5a** again moves nothing. A clip file that is gone (already moved) is listed under `problems`, not an error.
 - **6** rebuilds `data/final_dataset.json` from scratch each time, so the same clips give the same file. Empty text (`""`) is written as `null`.
 - **6** publishes only `verified` places. A place with a `place_id` that isn't verified is left out, with a warning that shows its status. Places with no `place_id` yet are counted in one warning line.
