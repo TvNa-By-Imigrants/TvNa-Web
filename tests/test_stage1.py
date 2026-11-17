@@ -125,6 +125,108 @@ code, out = run(VIDEO.replace("01", "78"))
 check("4 broken clip file in the folder: refused, says which file, nothing created",
       code == 1 and "PP-050.json" in out and snapshot() == before, out)
 
+# 5. single link also saves the video id
+check("5 single link: source.video_id saved", c1.get("source", {}).get("video_id") == "7000000000000000001", c1)
+
+# F. --from-file: every link checked before any clip is created
+FILES = WORK / "files"
+FILES.mkdir()
+C2 = WORK / "clips2"
+A = "https://www.tiktok.com/@a/video/7100000000000000001"
+B = "https://www.tiktok.com/@b/video/7100000000000000002"
+OLD = "https://www.tiktok.com/@old/video/7100000000000000003"
+DUP = "https://www.tiktok.com/@dup/video/7100000000000000004"
+ROUTES["https://vt.tiktok.com/ZSnewB/"] = B + "?is_from_webapp=1"
+ROUTES["https://vm.tiktok.com/ZSsameA/"] = A
+other("PP-001", OLD, folder=C2)
+other("PP-002", None, folder=C2)
+other("PP-003", "", folder=C2)
+other("PP-004", folder=C2)
+other("PP-005", source=None, folder=C2)
+other("PP-007", DUP, folder=C2 / "duplicates")
+
+def links_file(name, lines, bom=False, newline="\n"):
+    path = FILES / name
+    path.write_bytes(("\ufeff" if bom else "").encode() + newline.join(lines).encode("utf-8"))
+    return path
+
+LIST = links_file("links.txt", [
+    "# links from Sokha, 2026-11-18",          # 1 comment
+    "",                                         # 2 blank
+    A + "?is_from_webapp=1&lang=en",            # 3 new
+    "   ",                                      # 4 spaces only
+    A.replace("www.", ""),                      # 5 same as line 3
+    "https://vt.tiktok.com/ZSnewB/  cafe in BKK",  # 6 short link -> B, note after it
+    "https://vm.tiktok.com/ZSsameA/",           # 7 short link -> A
+    OLD + "?lang=km",                           # 8 already PP-001
+    DUP,                                        # 9 already in duplicates/
+    "https://www.youtube.com/watch?v=abc",      # 10 not TikTok
+    "https://vt.tiktok.com/ZSoffline/",         # 11 short link, can't expand
+    "PP-009",                                   # 12 not a link
+], bom=True, newline="\r\n")
+
+before = snapshot(C2)
+code, out = run("--from-file", LIST, "--check-only", clips_dir=C2)
+shorts = ["https://vt.tiktok.com/ZSnewB/", "https://vm.tiktok.com/ZSsameA/", "https://vt.tiktok.com/ZSoffline/"]
+check("F1 --check-only: nothing created or changed; only short links ask TikTok",
+      snapshot(C2) == before and sorted(NET) == sorted(shorts), (out, NET))
+check("F1 report: 2 new (lines 3, 6), 4 duplicates, 3 bad; BOM, CRLF, blank, spaces and # lines ignored",
+      "12 links" not in out and "9 links" in out and "new videos, to create (2)" in out and "Fix the bad links in the file.\n" in out + "\n"
+      and "line 3: " + A in out and "line 6: " + B in out
+      and "duplicates, not created (4)" in out and "-> same video as line 3" in out and "line 5: " + A.replace("www.", "") in out
+      and "line 7: https://vm.tiktok.com/ZSsameA/ -> same video as line 3" in out and "line 8: " + OLD + "?lang=km -> same video as PP-001\n" in out
+      and "line 9: " + DUP + " -> same video as PP-007 (in duplicates/)" in out
+      and "bad links, not created (3)" in out and "line 10: https://www.youtube.com/watch?v=abc -> only TikTok" in out
+      and "line 11: https://vt.tiktok.com/ZSoffline/ -> couldn't expand" in out and "line 12: PP-009 -> only TikTok" in out
+      and "Run again without --check-only" in out and code == 1, out)
+
+code, out = run("--from-file", LIST, clips_dir=C2)
+n8, n9 = C2 / "PP-008.json", C2 / "PP-009.json"
+c8, c9 = (load(n8) if n8.exists() else {}), (load(n9) if n9.exists() else {})
+check("F2 real run: only the 2 new videos created, numbered after duplicates/ (PP-008, PP-009), file order",
+      sorted(p.name for p in C2.glob("*.json")) == ["PP-001.json", "PP-002.json", "PP-003.json", "PP-004.json",
+                                                     "PP-005.json", "PP-008.json", "PP-009.json"]
+      and c8.get("source", {}).get("url") == A and c9.get("source", {}).get("url") == B, out)
+check("F2 new clips: clean link, video_id, creator, posted_at null, collected_at today",
+      c8["source"]["video_id"] == "7100000000000000001" and c9["source"]["video_id"] == "7100000000000000002"
+      and c8["source"]["creator"] == "@a" and c8["source"]["posted_at"] is None
+      and c8["source"]["collected_at"] == s1.date.today().isoformat() and c8["clip_id"] == "PP-008", (c8, c9))
+check("F2 report names the clips; Next lists both; other clips not changed; exit 1 for the bad links",
+      "line 3 -> PP-008: " + A in out and "line 6 -> PP-009: " + B + " (expanded from https://vt.tiktok.com/ZSnewB/)" in out
+      and "stage2_get_audio.py " in out and "PP-008.json" in out.split("Next:")[-1]
+      and all(p.read_bytes() == b for p, b in before.items()) and code == 1, out)
+
+before = snapshot(C2)
+code, out = run("--from-file", LIST, clips_dir=C2)
+check("F3 run twice: 0 created, nothing changed, the 2 new ones are now duplicates; only short links ask TikTok",
+      snapshot(C2) == before and "new videos, created (0)" in out and "duplicates, not created (6)" in out
+      and "line 3: " + A + "?is_from_webapp=1&lang=en -> same video as PP-008" in out and "line 6: https://vt.tiktok.com/ZSnewB/ -> same video as PP-009" in out
+      and sorted(NET) == sorted(shorts) and "Next:" not in out, (out, NET))
+
+GOOD = links_file("good.txt", ["https://www.tiktok.com/@c/video/7100000000000000010"])
+code, out = run("--from-file", GOOD, clips_dir=C2)
+check("F4 all links fine: exit 0, PP-010 created, no network", code == 0 and (C2 / "PP-010.json").exists()
+      and not NET and "Next: python stage2_get_audio.py" in out, out)
+
+before = snapshot(C2)
+for kind, path in [("empty file", links_file("empty.txt", [])),
+                   ("only comments and blanks", links_file("comments.txt", ["# nothing yet", "", "  "])),
+                   ("missing file", FILES / "nope.txt")]:
+    code, out = run("--from-file", path, clips_dir=C2)
+    check(f"F5 {kind}: refused, nothing created", code == 1 and snapshot(C2) == before, out)
+bad_bytes = FILES / "latin1.txt"
+bad_bytes.write_bytes(b"https://www.tiktok.com/@c/video/7100000000000000011 caf\xe9")
+code, out = run("--from-file", bad_bytes, clips_dir=C2)
+check("F5 not UTF-8: refused, says the file, nothing created",
+      code == 1 and "latin1.txt" in out and snapshot(C2) == before, out)
+
+for kind, args in [("link and --from-file", [A, "--from-file", GOOD]),
+                   ("no link", []),
+                   ("--posted-at with --from-file", ["--from-file", GOOD, "--posted-at", "2026-10-22"]),
+                   ("--check-only with one link", ["https://www.tiktok.com/@c/video/7100000000000000012", "--check-only"])]:
+    code, out = run(*args, clips_dir=C2)
+    check(f"F6 {kind}: usage error, nothing created", code == 2 and snapshot(C2) == before and not NET, out)
+
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(0 if all(results) else 1)

@@ -12,10 +12,12 @@ classDiagram
     +str notes
   }
   class Source {
-    <<stage 1 person>>
+    <<stage 1 script, caption by stage 2>>
     +str url
+    +str video_id
     +str platform
     +str creator
+    +str caption
     +date posted_at
     +date collected_at
   }

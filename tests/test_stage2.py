@@ -86,6 +86,10 @@ def check(name, cond, detail=""):
     results.append(cond)
     print(("PASS " if cond else "FAIL ") + name + ("" if cond else f"\n     {detail}"))
 
+def after_creator(clip):
+    keys = list(clip["source"])
+    return keys[keys.index("creator") + 1] if "creator" in keys[:-1] else None
+
 def load(p):
     return json.loads(Path(p).read_text(encoding="utf-8"))
 
@@ -108,7 +112,7 @@ check("1 normal: yt-dlp asks for the video file ('best', not the separate TikTok
       and isinstance(FakeYDL.seen_opts["logger"], s2._QuietLogger))
 check("1 normal: no .part file left", not list(AUDIO.glob("*.part")))
 check("1 normal: caption saved (hashtags kept), printed short", c["source"]["caption"] == CAPTION
-      and f"  caption: {CAPTION}\n" in out and list(c["source"])[:4] == ["url", "platform", "creator", "caption"],
+      and f"  caption: {CAPTION}\n" in out and after_creator(c) == "caption",
       (c["source"], out))
 print("----- output of a normal run -----\n" + out + "----------------------------------")
 
@@ -201,7 +205,7 @@ c = load(p16)
 check("16a WAV there, no caption: caption read with no download", code == 0 and FakeYDL.downloads == 0
       and c["source"]["caption"] == "ហាងកាហ្វេ  Luv selfie booth   #selfie" and "saved the caption" in out
       and "no download" in out, (c["source"], out))
-check("16a caption key put right after creator", list(c["source"])[:4] == ["url", "platform", "creator", "caption"],
+check("16a caption key put right after creator", after_creator(c) == "caption",
       list(c["source"]))
 check("16a Khmer caption is NFC", c["source"]["caption"] == unicodedata.normalize("NFC", c["source"]["caption"]))
 code, out = run(p16)

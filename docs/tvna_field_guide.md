@@ -3,8 +3,9 @@
 We use **4 kinds of JSON files**. This guide shows each one **in full**, with the **same example place** (Tea Kingdom), so you can see how they connect. Example values only, not real data.
 
 - The full process is in the Google Doc "TVNA Data Pipeline".
-- The class diagram is in `audio-text/docs/tvna_data_model.png`.
-- The scripts and empty templates are in `text-json/`.
+- How the files connect: `docs/tvna_data_model.mmd`.
+- The scripts are in the repo root (`stage1_new_clip.py` … `stage6_build_final_dataset.py`); empty templates are in `templates/`.
+- How to run each stage, and the team review steps: the [README](../README.md).
 
 Missing information is always `null` (never `""`, "N/A" or "Unknown").
 
@@ -12,16 +13,17 @@ Missing information is always `null` (never `""`, "N/A" or "Unknown").
 
 ## 1. The 4 files, in full
 
-### File 1: Clip file (`clips/02.json`), one per video
+### File 1: Clip file (`clips/PP-002.json`), one per video
 
 This is the main file. Every stage adds to it. Start each new clip from `tvna_clip_template.json`.
 
 ```json
 {
-  "clip_id": "02",
-  "audio_file": "02.wav",
+  "clip_id": "PP-002",
+  "audio_file": "PP-002.wav",
   "source": {
-    "url": "https://www.tiktok.com/@motokew/video/...",
+    "url": "https://www.tiktok.com/@motokew/video/7000000000000000002",
+    "video_id": "7000000000000000002",
     "platform": "tiktok",
     "creator": "@motokew",
     "caption": "Tea time at Tea Kingdom 🍵 #phnompenh",
@@ -83,11 +85,11 @@ This is the main file. Every stage adds to it. Start each new clip from `tvna_cl
 
 Here `completeness` is 0.67 because stage 4 found no district. The team added `area` later (see section 5).
 
-Another clip, `07.json` from creator `@foodkh`, also talks about Tea Kingdom. So its place also has `"place_id": "tvna_p_0005"`.
+Another clip, `PP-007.json` from creator `@foodkh`, also talks about Tea Kingdom. So its place also has `"place_id": "tvna_p_0005"`.
 
 ### File 2: `places.json`, one list for the whole project
 
-One entry per **real place**: its name, districts, map link and every name people use for it. `match_places.py` creates and updates this file (stage 5c).
+One entry per **real place**: its name, districts, map link and every name people use for it. `stage5c_match_places.py` creates and updates this file.
 
 ```json
 [
@@ -145,8 +147,8 @@ Made automatically in stage 6 from the 3 files above.
   "menu_items": ["Jasmine tea", "Osmanthus Oolong tea"],
   "popularity": 2,
   "mentions": [
-    {"clip_id": "02", "creator": "@motokew", "speaker_opinion": "Recommends the Jasmine tea and the Osmanthus Oolong tea."},
-    {"clip_id": "07", "creator": "@foodkh",  "speaker_opinion": "..."}
+    {"clip_id": "PP-002", "creator": "@motokew", "speaker_opinion": "Recommends the Jasmine tea and the Osmanthus Oolong tea."},
+    {"clip_id": "PP-007", "creator": "@foodkh",  "speaker_opinion": "..."}
   ]
 }
 ```
@@ -161,7 +163,7 @@ A link means the **same value is written in two files**.
 |---|---|---|---|
 | Which place? | `fields[].place_id` in the clip file | `place_id` in places.json | `"tvna_p_0005"` |
 | Which district? | `fields[].area` and `area` in places.json | `district` in areas.json | `"Boeng Keng Kang"` |
-| Which clip? | `mentions[].clip_id` in the final dataset | `clip_id` in the clip file | `"02"` |
+| Which clip? | `mentions[].clip_id` in the final dataset | `clip_id` in the clip file | `"PP-002"` |
 
 Stage 6 joins everything. For each `place_id` it finds all clips with that id:
 - `place_name` = the name in places.json. If it is empty, the script writes `null` and warns.
@@ -189,16 +191,16 @@ One video can review 3 or 4 places. Then `fields` has one object per place. Each
 
 Anything not filled yet stays `null`.
 
-| Stage | Who | Fields | Script (in `text-json/`) |
+| Stage | Who | Fields | Script |
 |---|---|---|---|
-| 1. Collect data | Person | `clip_id`, `source` (url, platform, creator, posted_at, collected_at) | none, start from `tvna_clip_template.json` |
+| 1. Collect data | Person gives the links; script | `clip_id`, `source` (url, video_id, platform, creator, collected_at; posted_at if given). Duplicates get no clip file | `stage1_new_clip.py` |
 | 2. Video to audio | Script | `audio_file`, `source.caption` (the creator's TikTok caption, hashtags included; `null` if none), `source.posted_at` if empty | `stage2_get_audio.py` |
-| 3. Audio to transcript | Script + Gemini | `stt`. Person: `ground_truth` (test clips only) | in `audio-text/` |
-| 4. Transcript + caption to fields | LLM + code | `extraction` and every place in `fields` (see below) | `extract_places_gemini.py` |
-| 5a. Remove duplicates | Script | moves duplicate clip files, adds `duplicate_of` | `dedupe_clips.py` |
+| 3. Audio to transcript | Script + Gemini | `stt`. Person: `ground_truth` (test clips only) | `stage3_transcribe.py` |
+| 4. Transcript + caption to fields | LLM + code | `extraction` and every place in `fields` (see below) | `stage4_extract_places.py` |
+| 5a. Remove duplicates | Script | moves duplicate clip files, adds `duplicate_of` | `stage5a_dedupe_clips.py` |
 | 5b. Team review | Team | `area` (if empty), `google_maps_url`, missing values, `cleaned_by`, `cleaner_note`, status `verified` or `rejected` | none, edit the clip file |
-| 5c. Match places | Script, then team | `place_id` (never the LLM; `verified` places only), places.json | `match_places.py` |
-| 6. Final dataset | Script | `final_dataset.json` | `build_final_dataset.py` |
+| 5c. Match places | Script, then team | `place_id` (never the LLM; `verified` places only), places.json | `stage5c_match_places.py` |
+| 6. Final dataset | Script | `final_dataset.json` | `stage6_build_final_dataset.py` |
 
 In stage 4:
 - **LLM fills:** `place_name`, `place_name_alt`, `category`, `sub_category`, `price_range`, `area`, `area_description`, `opening_hours`, `speaker_opinion`, `menu_items`, `notes`, `confidence`, `missing_reasons`, `evidence_text`, `segment_ids`.
@@ -292,7 +294,7 @@ A person changes the status to `verified` (or `rejected`) after checking. Only `
 
 Example: "near Russian Market" → found on Google Maps → address in Chamkar Mon → `"area": ["Chamkar Mon"]`.
 
-Fill `google_maps_url` before stage 5c. `match_places.py` copies it into places.json only when it creates a new place. After that, edit the link in places.json.
+Fill `google_maps_url` before stage 5c. Stage 5c copies it into places.json only when it creates a new place. After that, edit the link in places.json.
 
 ### Name
 
@@ -305,32 +307,33 @@ The name only counts when stage 5c **creates** the place in places.json. For a p
 
 ---
 
-## 7. Removing duplicates (stage 5a)
+## 7. Removing duplicates (stage 1, then 5a)
 
-The same video must not be counted twice in `popularity`.
+The same video must not be counted twice in `popularity`, and must not cost Gemini tokens twice.
 
-- **Same video** = same video id in `source.url` (TikTok `/video/<number>`, YouTube, Instagram reel), or the same address for other links.
-- The clip whose file name is its `clip_id` is kept (`PP-004.json`, not a copy like `PP-004 copy.json`); among several, the first by file name. The others move to `clips/duplicates/` with `"duplicate_of": "<kept clip_id>"`.
+- **Same video** = the same TikTok video number (`/video/<number>`), saved in `source.video_id` and in `source.url`.
+- **Stage 1 (main check, before any tokens are spent):** every new link is turned into its video number (short `vt.tiktok.com` links are expanded first) and compared with every clip in `clips/` and `clips/duplicates/`, and with the links above it in a `--from-file` list. A duplicate gets **no** clip file. `--check-only` shows the report without creating anything.
+- Stage 1 can only see clips on your computer, so run `git pull` first.
+- **Stage 5a (safety net):** catches what got past stage 1, e.g. a clip file copied by hand. It keeps the clip whose file name is its `clip_id` (`PP-004.json`, not `PP-004 copy.json`); among several, the first by file name. The others move to `clips/duplicates/` with `"duplicate_of": "<kept clip_id>"`.
 - Two clips with the same `clip_id` but different videos are listed as a problem: give one a new PP number (`clip_id` and file name).
 - Nothing is deleted. To undo, move the file back.
-- Only the URL is checked, not the transcript.
-- Short links (`vt.tiktok.com/...`) are not opened. A short link and a full link to the same video are **not** caught. Paste the full link when you can.
-- It only reads `source.url`, so you can also run it before stage 4 to save API calls.
-
----
+- Only the link is checked, not the transcript. 5a doesn't open short links (stage 1 already expanded them).
 
 ## 8. Matching places (stage 5c)
 
-How a clip place gets its `place_id` (`match_places.py`):
+How a `verified` place gets its `place_id` (`stage5c_match_places.py`). Names are compared after cleaning (Unicode NFC, no spaces or punctuation, lowercase). `place_name` and `place_name_alt` are compared with `place_name` and `aliases` of every entry in places.json:
 
-1. Clean the name: Unicode NFC, remove all spaces, lowercase.
-2. Compare `place_name` and `place_name_alt` with `place_name` and `aliases` of every entry in places.json. **Exact match only.**
+1. Same Google Maps link → matched.
+2. Same name or alias → matched.
+3. Name score 95% or more (Latin names only) → matched; the new spelling is saved as an alias.
+4. Score 75–94%, one name inside the other, or a close Khmer name → unclear.
+5. Anything else → new place.
 
 | Result | What happens | Report group |
 |---|---|---|
 | One place matches | Reuse its `place_id`. New names are added to `aliases`, new districts to `area` | matched |
 | No place matches | New entry in places.json with a new id (`tvna_p_0006`, ...) | new |
-| More than one place matches | `place_id` stays null. The team picks the id from places.json and writes it in the clip | unclear |
+| Unclear (several places, or only close) | `place_id` stays null. The team writes the suggested id in the clip (same place) or `"new"` (a different place), then runs 5c again | unclear |
 
 - Only `verified` places are matched. `rejected` places are skipped. Every other place is listed as `waiting for review` with its status, and nothing changes for it (not even a `place_id` the team wrote).
 - Skipped: places that already have a `place_id`, `rejected` places, places with no name.
@@ -363,7 +366,6 @@ Empty templates (in `templates/`): `tvna_clip_template.json`, `tvna_clip_place_t
 ## 11. Open items (not decided or not built yet)
 
 - **Sponsored:** removed for now. One value per clip would count for every place in a multi-place clip. If it comes back, it should be per place.
-- **Similar names:** only exact matches. A typo ("Tea Kingdon") becomes a new place. A similarity score (for example 95 = same, 75–95 = team decides) is not built.
 - **Final dataset extras:** `url` and `posted_at` in `mentions`, and `sub_category`, are not included.
 - **Score after review:** `completeness` is not recalculated after the team fills fields.
 - **Outside Phnom Penh:** places in other provinces (e.g. Siem Reap in `clips/02.json`) are not rejected automatically. The team decides.

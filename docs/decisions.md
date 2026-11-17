@@ -4,6 +4,16 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-18: Duplicates are removed in stage 1, before any tokens are spent
+
+**Decision:** stage 1 takes a list of links (`--from-file links.txt`, with `--check-only` to look first). It turns every link into its TikTok video number and compares it with every clip in `data/clips/` and `duplicates/`, and with the links above it. Only new videos get a clip file. The video number is also saved as `source.video_id`. Stage 5a stays as a safety net (e.g. a clip file copied by hand).
+
+**Why:** before, a duplicate could go through stages 2–4 (TikTok download, two Gemini calls) and only then be moved by 5a. That wastes tokens.
+
+**Storage:** no database. The clip JSON files in git are the data; `git pull` first so stage 1 sees the team's clips. A database is worth it only with many thousands of clips or many people adding links at the same time.
+
+**Other options:** check duplicates only in 5a (rejected: tokens already spent); a separate "clean the list" script (rejected: one more command to remember; stage 1 already reads every clip).
+
 ## 2026-11-17: Only verified places get a place_id and reach the website
 
 **Decision:** stage 5c matches or creates a place only when the team set `"verification_status": "verified"` in 5b. Every other status (`needs_review`, `auto_added`, empty, a typo) is listed as "waiting for review", and nothing changes for it. Stage 6 also publishes only `verified` places; one with a `place_id` that isn't verified is left out with a warning.
