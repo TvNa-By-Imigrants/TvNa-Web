@@ -39,6 +39,23 @@ flowchart LR
 
 **Data storage:** JSON files in git, one file per video (`data/clips/PP-001.json`). No database is needed at this size; git shares the data in the team and keeps every change.
 
+### Tools used
+
+All code is **Python 3.12**. Versions are pinned in `requirements.txt` / `requirements.lock.txt`.
+
+| Stage | Tools | What the tool does there |
+|---|---|---|
+| 1. Collect | Python only (`urllib`, `re`) | expands short links, takes the video number from each link, compares it with existing clips |
+| 2. Audio | **yt-dlp** 2026.10.26, **ffmpeg** | yt-dlp downloads the TikTok video and reads its caption and date; ffmpeg turns it into a 16 kHz mono WAV |
+| 3. Transcript | **Google Gemini API** (`google-genai` 3.0.0): `gemini-3.8-flash`, backup `gemini-3.6-flash` | listens to the WAV, writes Khmer + English text |
+| 4. Places | **Gemini API**: `gemini-3.6-flash`, backup `gemini-3.8-flash`; **pydantic** 2.14.3 | Gemini reads transcript + caption; pydantic forces a fixed JSON answer shape and rejects a broken one |
+| 5a. Duplicates | Python only | compares video numbers, moves files |
+| 5b. Review | **Google Maps** + a text editor | a person finds the place, its district and Share link |
+| 5c. Match | Python `difflib` | scores how alike two names are (95% = same, 75–94% = unclear) |
+| 6. Final | Python only (`json`) | joins clips and places.json into one file |
+
+**Shared:** JSON files in **git/GitHub** (the data storage); **python-dotenv** 1.2.4 reads the Gemini key from `.env` (never in the code); a **venv** so everyone runs the same versions; tests in plain Python with fake TikTok and fake Gemini. Only stages 3 and 4 make AI calls (Gemini free tier).
+
 ---
 
 ## 3. Each stage
