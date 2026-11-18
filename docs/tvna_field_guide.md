@@ -330,7 +330,9 @@ How a `verified` place gets its `place_id` (`stage5c_match_places.py`). Names ar
 1. Same Google Maps link → matched.
 2. Same name or alias → matched.
 3. Name score 95% or more (Latin names only) → matched; the new spelling is saved as an alias.
-4. Score 75–94%, one name inside the other, or a close Khmer name → unclear.
+4. Score 75–94%, one name inside the other (3+ letters), or a close Khmer name → unclear (up to 3 suggestions).
+
+Also unclear: a Maps link or a name shared by two or more places, and the same name with a different Maps link (another branch, or a different place?).
 5. Anything else → new place.
 
 | Result | What happens | Report group |

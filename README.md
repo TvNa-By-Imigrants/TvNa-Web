@@ -157,15 +157,22 @@ PP-003.json  "Luv selfie booth"                            ───► tvna_p_0
 
 **Who sets it:** only stage 5c, and only for `verified` places. Gemini never does. You type one only when 5c asks (below).
 
-**How 5c decides** (each `verified` place, in order):
+**Before matching:** only `verified` places are matched. `rejected` places and places that already have a `place_id` are skipped; every other status is listed as "waiting for review" and nothing changes. A `place_id` written by the team that isn't in places.json is reported as `unknown_id`.
 
-| Check | Result |
-|---|---|
-| Same Google Maps link as a place in places.json | same place |
-| Same name as a place's name or alias (capitals, spaces, punctuation don't matter) | same place |
-| Name 95% alike (not for Khmer names) | same place; the new spelling is added to `aliases` |
-| 75–94% alike, one name inside the other, or a close Khmer name | **unclear**: `place_id` stays `null`, 5c suggests one |
-| Anything else | **new** place, `tvna_p_0003`…, named after this clip's `place_name` |
+**What is compared:** the clip's `place_name` **and** every name in `place_name_alt`, against each place's `place_name` **and** every name in `aliases` in places.json. Before comparing, names are cleaned: capitals, spaces, punctuation and accents don't matter, `&` = `and`, `ឲ` = `ឱ`.
+
+**How 5c decides** (each `verified` place, in order; the first check that fits wins):
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Same Google Maps link as **one** place | same place |
+| 1b | Same Maps link as **two or more** places | **unclear** |
+| 2 | Same name as **one** place (name or alias) | same place |
+| 2b | Same name as **two or more** places | **unclear** ("candidates …") |
+| 2c | Same name, but a **different** Maps link | **unclear**: "another branch, or a different place?" |
+| 3 | Name 95% or more alike with exactly one place (not for Khmer names) | same place; the new spelling is added to `aliases` |
+| 4 | 75–94% alike, one name inside the other (3+ letters), or a close Khmer name | **unclear**: `place_id` stays `null`; 5c suggests up to 3 places |
+| 5 | Anything else | **new** place, `tvna_p_0003`…, named after this clip's `place_name` |
 
 Every name that gets a `place_id` is added to that place's `aliases`, so next time it matches exactly. That's why "Hanjang Coffee & Eatery" (the misheard name, kept in `place_name_alt`) matched PP-005 above.
 
