@@ -456,7 +456,7 @@ This lists the clip files that have places nobody checked yet. (Stage 5c also li
 5. **Sign it:** your name in `cleaned_by`, a short note in `cleaner_note` (e.g. "district from Google Maps").
 6. **Status:** `"verified"` (correct, goes to the website) or `"rejected"` (not a place, not in Phnom Penh, or wrong).
 
-Can't find the place on Maps? Leave `area` and `google_maps_url` as `null` and explain in `cleaner_note`. Then decide the status as above.
+Can't find the place on Maps? Leave `area` and `google_maps_url` as `null`, write what you tried in `cleaner_note`, and **keep the status `needs_review`** (held back, not on the website; someone can try again later).
 
 **Done =** every place is `verified` or `rejected`. Then commit, push, and run 5c.
 

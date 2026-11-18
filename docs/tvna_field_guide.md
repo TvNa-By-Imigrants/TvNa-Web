@@ -289,7 +289,7 @@ A person changes the status to `verified` (or `rejected`) after checking. Only `
 3. Check it is the right place (name, photos, type).
 4. Copy the Share link into `google_maps_url`.
 5. Pick the district from areas.json, using the Maps address. Write it in `area` as a list, e.g. `["Chamkar Mon"]`. For branches, add one district per branch.
-6. Can't find it? Leave both `null` and explain in `cleaner_note`.
+6. Can't find it? Leave both `null`, write what you tried in `cleaner_note`, and keep the status `needs_review` (held back, not on the website). Skip step 7's status.
 7. Write your name in `cleaned_by` and set the status: `verified` (it goes on to 5c and the website) or `rejected`.
 
 Example: "near Russian Market" → found on Google Maps → address in Chamkar Mon → `"area": ["Chamkar Mon"]`.

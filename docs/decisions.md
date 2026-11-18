@@ -4,6 +4,14 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-18: A place not found on Google Maps is held back
+
+**Decision:** if the team can't find a place on Google Maps (so no district and no Maps link), they leave `area` and `google_maps_url` as `null`, write what they tried in `cleaner_note`, and keep `verification_status: "needs_review"`. It is not published and not rejected.
+
+**Why:** the website filters places by district, so a place with no district would be hard to find; and a place nobody could confirm may not exist. Holding it back loses nothing: someone can try again later.
+
+**Other options:** publish without a district (rejected: unconfirmed, and missing from district filters); reject (rejected: the place may be real, just hard to find).
+
 ## 2026-11-18: Duplicates are removed in stage 1, before any tokens are spent
 
 **Decision:** stage 1 takes a list of links (`--from-file links.txt`, with `--check-only` to look first). It turns every link into its TikTok video number and compares it with every clip in `data/clips/` and `duplicates/`, and with the links above it. Only new videos get a clip file. The video number is also saved as `source.video_id`. Stage 5a stays as a safety net (e.g. a clip file copied by hand).

@@ -111,6 +111,29 @@ All code is **Python 3.12**. Versions are pinned in `requirements.txt` / `requir
 - **Condition to go on:** status `verified`. **Nothing reaches the website without a person's approval.**
 - **Key point:** the AI suggests, a person decides. A misheard name can never reach the website unchecked.
 
+#### Location: `area`, `area_description`, `google_maps_url`
+
+Three fields hold where a place is:
+
+| Field | What it holds | Filled by |
+|---|---|---|
+| `area` | the **district**, always one of the 14 names in `data/areas.json` (a list, for branches) | stage 4, only if the video or caption names a district; otherwise the team |
+| `area_description` | any words about the location, as said or written: street, landmark, neighborhood, "📍…" | stage 4 |
+| `google_maps_url` | the Google Maps Share link | **always the team** (the AI never fills it) |
+
+Stage 4 puts a value in `area` only if it **exactly** matches a district in `areas.json`, in English or Khmer (ចំការមន = "Chamkar Mon"). Anything else (a street, a landmark, "BKK1") goes to `area_description`. If Gemini puts a non-district in `area`, the code moves it to `area_description` and adds the flag `area_not_in_areas_list`.
+
+What the team does in 5b, by case:
+
+| Case | Example after stage 4 | Team does |
+|---|---|---|
+| **A. A district is named** | `area: ["Chamkar Mon"]` | confirm it on Google Maps; add the Share link |
+| **B. Only a street, landmark or neighborhood** | `area: null`, `area_description: "located on street 216 near National Olympic Stadium"` | search Google Maps with the name + `area_description`; check it's the right place (name, photos); take the district from the Maps **address** and write it exactly as in `areas.json`; add the Share link |
+| **C. Nothing about the location** | `area: null`, `area_description: null` | search Google Maps by the place name, plus clues from the video (signs, the caption, the creator's other posts); then as in B |
+| **D. Not found on Google Maps** | still `null` | leave `area` and `google_maps_url` as `null`; write what was tried in `cleaner_note`. **Keep the status `needs_review`**: held back, not on the website; anyone can try again later |
+
+Why the Maps link matters: stage 5c matches places by Maps link first, so two videos of the same shop join even when the names are spelled differently. 5c copies the link into `places.json` when it creates the place.
+
 ### Stage 5c: Match places (`place_id`)
 
 - **How it works:** many videos show the same shop, often spelled differently. 5c gives each verified place a `place_id` and keeps one list of real places (`places.json`) with all their names. In order:
@@ -162,6 +185,8 @@ All code is **Python 3.12**. Versions are pinned in `requirements.txt` / `requir
 **Built and tested:** all stages (1–6). Stage 5b is done by hand with a written checklist.
 
 **Real data so far:** 2 clips through stage 4 (PP-002, PP-003); none reviewed yet.
+
+**Decided 2026-11-18:** a place the team can't find on Google Maps is held back (`needs_review` + `cleaner_note`), not published and not rejected. The website filters by district, so a place with no district would be hard to find.
 
 **Known limits:**
 - Places outside Phnom Penh are not rejected automatically yet; the team rejects them in review.
