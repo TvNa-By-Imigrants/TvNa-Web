@@ -13,7 +13,23 @@ Turns **TikTok videos about places in Phnom Penh** into `data/final_dataset.json
 
 **Scope:** TikTok videos only. Places in Phnom Penh only.
 
-**Contents:** [The pipeline in one picture](#the-pipeline-in-one-picture) · [How a clip file grows](#how-a-clip-file-grows) · [The 5 JSON files](#the-5-json-files-templates) · [How `place_id` works](#how-place_id-works) · [Where we are now](#where-we-are-now) · [Setup](#setup-once-per-computer) · [How to run](#how-to-run) · [Test stages 1–6 yourself](#test-stages-16-yourself) · [Stages 1–6](#stage-1-add-videos) · [Team review (5b)](#stage-5b-team-review) · [Team rules](#team-rules)
+**Contents:** [Words you'll see](#words-youll-see) · [The pipeline in one picture](#the-pipeline-in-one-picture) · [How a clip file grows](#how-a-clip-file-grows) · [The status of a place](#the-status-of-a-place) · [The 5 JSON files](#the-5-json-files-templates) · [How `place_id` works](#how-place_id-works) · [Where we are now](#where-we-are-now) · [Setup](#setup-once-per-computer) · [How to run](#how-to-run) · [Test stages 1–6 yourself](#test-stages-16-yourself) · [Stages 1–6](#stage-1-add-videos) · [Team review (5b)](#stage-5b-team-review) · [Team rules](#team-rules)
+
+---
+
+## Words you'll see
+
+| Word | Meaning |
+|---|---|
+| **clip** | one TikTok video |
+| **clip file** | the JSON file for one clip, e.g. `data/clips/PP-002.json`. Every stage adds to it |
+| **place** | a shop, café or other spot in a video. One video can show several places |
+| **place record** | one place inside a clip file (the `fields` list has one record per place) |
+| **status** | `verification_status` of a place: `rejected`, `needs_review`, `auto_added` or `verified` ([see below](#the-status-of-a-place)) |
+| **`place_id`** | the ID of a real place, e.g. `tvna_p_0001`. Two videos about the same café get the same one |
+| **caption** | the text the creator typed under the TikTok video |
+| **transcript** | the words spoken in the video, written down by Gemini |
+| **district** | one of Phnom Penh's 14 districts, from `data/areas.json` |
 
 ---
 
@@ -74,6 +90,29 @@ The place in `fields` right after stage 4 (real values, some fields left out). *
 ```
 
 Read it like this: `missing_fields` says the **district** is missing; `flags` says the name **comes from the caption** (check it); `google_maps_url` is always empty after stage 4 (the team finds it). [Stage 5b](#stage-5b-team-review) explains every one.
+
+---
+
+## The status of a place
+
+Every place record has a status (`verification_status`). It decides what happens next.
+
+| Status | Set by | Means | On the website? |
+|---|---|---|---|
+| `rejected` | stage 4 or a person | not a real place: no name, only a #hashtag or @account, or a person decided it's wrong or outside Phnom Penh | **no**, never |
+| `needs_review` | stage 4 | found, but something is missing or uncertain | **no**, waits for a person |
+| `auto_added` | stage 4 | found, with all 3 key fields (name, district, opinion) | **no**, waits for a person |
+| `verified` | **a person** (5b) | checked and approved | **yes**, after 5c gives it a `place_id` |
+
+**`auto_added` does not add the place anywhere.** It is only a label meaning "this place looks complete". The place stays in its clip file like every other place, and a person must still check it and set `verified`, exactly like `needs_review`. The reviewer just has less to fill in. (The name comes from an old plan to publish complete places without review. That plan was dropped.)
+
+```
+stage 4:     rejected        needs_review        auto_added
+                                   └────────┬─────────┘
+stage 5b:          a person checks it:   verified   or   rejected
+                   (not found on Google Maps: stays needs_review, held back)
+stage 5c, 6:       only verified places get a place_id and go on the website
+```
 
 ---
 
@@ -297,7 +336,7 @@ There is no database: these JSON files in git **are** the data. `git pull` gives
 - **Duplicate found later (5a):** the copy moves to `data/clips/duplicates/`.
 - **Everything else stays in `data/clips/`.** The status is written **inside** the file, per place (`rejected`, `needs_review`, `auto_added`, `verified`), because one video can have several places with different statuses. A stage that fails leaves the clip unchanged.
 - Nothing is ever deleted. Only `verified` places reach `places.json` and `final_dataset.json`.
-- Full table, case by case: [docs/tvna_pipeline_explained.md, section 4](docs/tvna_pipeline_explained.md#4-where-files-go-when-a-condition-is-not-met).
+- Full table, case by case: [docs/tvna_pipeline_explained.md, section 7](docs/tvna_pipeline_explained.md#7-folders-and-where-a-file-goes-when-a-condition-is-not-met).
 
 ---
 
@@ -373,9 +412,10 @@ Next: python stage3_transcribe.py data/clips/PP-002.json
 **In:** the WAV. **Out:** `stt.transcript`: Khmer in Khmer script, English in English, no translation. Audio only (the caption is not used here, so the name as spoken is kept).
 
 ```
-PP-002: saved transcript (37 lines, gemini-3.6-flash)
-  ហាងម្ហូបកូរ៉េឆ្ងាញ់
-  មួយកន្លែងទៀតនៅ Toul Tompoung
+PP-002: saved transcript (30 lines, gemini-3.6-flash)
+  ហែម ភូក ក៏ ឆ្ងាញ់
+  បាទ ថ្ងៃ នេះ ទៅ ទៅ ៗ
+  សម្រាប់ អ្នក ដែល ចូលចិត្ត ញ៉ាំ អី នៅ កន្លែង ដែល ជន ជាតិ ដើម គេ បើក ហ្មង ណា
 Next: python stage4_extract_places.py data/clips/PP-002.json
 ```
 
@@ -403,13 +443,14 @@ Next: python stage5a_dedupe_clips.py data/clips/*.json
 - A place named only in the caption gets the flag `name_from_caption`. Sponsors, @accounts and #hashtags are not places (`name_is_tag`, `rejected`).
 - `[no speech]` clip with a caption → read from the caption. No caption either → skipped.
 
-**Code then scores each place** (`completeness` = how many of `place_name`, `area`, `speaker_opinion` are filled, out of 3) and sets the status:
+**Then the code sets the status.** It counts how many of the 3 key fields are filled: name, district, opinion (`completeness`).
 
-| Result | `verification_status` |
+| Stage 4 finds | Status |
 |---|---|
-| No name, or only a tag | `rejected` (kept, not deleted) |
-| 1 or 2 of the 3 filled | `needs_review` |
-| All 3 filled | `auto_added` (still needs a person to check) |
+| no name, or the "name" is only a #hashtag or @account | `rejected` (kept, not deleted) |
+| a name, but only 1 or 2 of the 3 key fields | `needs_review` |
+| all 3 key fields | `auto_added` (**not** added anywhere; still waits for a person, [see above](#the-status-of-a-place)) |
+| all 3, but the name is only in the caption, not said (could be a sponsor) | `needs_review` |
 
 ### `data/gemini_answers/`: Gemini's first answer
 
@@ -452,7 +493,7 @@ This lists the clip files that have places nobody checked yet. (Stage 5c also li
 
 | Field | What it tells you |
 |---|---|
-| `verification_status` | `needs_review`: something is missing. `auto_added`: looks complete, still check it. `rejected`: no name or only a tag; skip unless it's really a place |
+| `verification_status` | `needs_review`: something is missing or uncertain. `auto_added`: looks complete, but still check it (it is **not** published yet). `rejected`: no name or only a tag; skip unless it's really a place |
 | `missing_fields` | which of `place_name`, `area`, `speaker_opinion` is empty. **Fill these** |
 | `flags` | what to double-check (table below) |
 | `google_maps_url` | always empty after stage 4. **You find it** |
@@ -539,7 +580,7 @@ Only `verified` places with a `place_id` are published. It warns about the rest,
 
 ## More detail
 
-- [`docs/tvna_pipeline_explained.md`](docs/tvna_pipeline_explained.md): the whole pipeline on 4 pages (for the supervisor): each stage, its gate, key takeaways, limits.
+- [`docs/tvna_pipeline_explained.md`](docs/tvna_pipeline_explained.md): the whole pipeline explained for the supervisor: each stage (input, output, when it continues), statuses, folders, key takeaways, limits.
 - [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md): every field, who fills it, value rules, category list.
 - [`docs/decisions.md`](docs/decisions.md): key decisions and why.
 - [`docs/tvna_data_model.mmd`](docs/tvna_data_model.mmd): how the JSON files connect (the `.png` picture is older: it still shows `place_name_alt` in the final dataset).

@@ -278,6 +278,8 @@ These 3 come from the team's research on 10 clips. The other fields are still ex
 
 The rule in code: no name or below 0.3 → `rejected`; 0.7 or below → `needs_review`; above 0.7 → `auto_added`.
 
+**`auto_added` does not add the place anywhere.** It is only a label for "looks complete". The place stays in its clip file and still needs a person to set `verified`, exactly like `needs_review`. Neither status is published.
+
 A person changes the status to `verified` (or `rejected`) after checking. Only `verified` places go on to stage 5c and the website. The score is set once in stage 4. It is **not** calculated again after the team fills fields.
 
 ---
