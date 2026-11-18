@@ -293,6 +293,7 @@ A person changes the status to `verified` (or `rejected`) after checking. Only `
 5. Pick the district from areas.json, using the Maps address. Write it in `area` as a list, e.g. `["Chamkar Mon"]`. For branches, add one district per branch.
 6. Can't find it? Leave both `null`, write what you tried in `cleaner_note`, and keep the status `needs_review` (held back, not on the website). Skip step 7's status.
 7. Write your name in `cleaned_by` and set the status: `verified` (it goes on to 5c and the website) or `rejected`.
+8. Check your work: `python stage5b_validate_clips.py data/clips/*.json`. It changes nothing and lists mistakes, e.g. a misspelled status (`"verfied"`), a district not spelled as in areas.json (`"7 Makara"` → `"Prampi Makara"`), or `"nothing"` instead of `null`. Fix until it shows `problems (0)`, then run 5c.
 
 Example: "near Russian Market" → found on Google Maps → address in Chamkar Mon → `"area": ["Chamkar Mon"]`.
 

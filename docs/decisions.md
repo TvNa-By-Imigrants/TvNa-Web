@@ -4,6 +4,14 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-18: A checker for the team review (5b)
+
+**Decision:** `stage5b_validate_clips.py` checks the team's hand edits before stage 5c. It only reads the clip files and never changes them. It lists each place as a problem, to review, or ready, and exits with an error when there is a problem.
+
+**Why:** the first real review (PP-005) had 4 easy mistakes: `"verfied"`, `"7 Makara"`, `"nothing"` instead of `null`, and an edited `missing_fields`. Nothing warned about them until 5c and 6, and the typo alone kept the place off the website without any error.
+
+**Other options:** let 5c refuse such files (rejected: 5c writes files, and a check that changes nothing is safer to run any time); fix mistakes automatically (rejected: a person should see and fix their own edits).
+
 ## 2026-11-18: A place not found on Google Maps is held back
 
 **Decision:** if the team can't find a place on Google Maps (so no district and no Maps link), they leave `area` and `google_maps_url` as `null`, write what they tried in `cleaner_note`, and keep `verification_status: "needs_review"`. It is not published and not rejected.
