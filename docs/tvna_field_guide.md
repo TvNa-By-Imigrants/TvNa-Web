@@ -198,7 +198,7 @@ Anything not filled yet stays `null`.
 | 3. Audio to transcript | Script + Gemini | `stt`. Person: `ground_truth` (test clips only) | `stage3_transcribe.py` |
 | 4. Transcript + caption to fields | LLM + code | `extraction` and every place in `fields` (see below) | `stage4_extract_places.py` |
 | 5a. Remove duplicates | Script | moves duplicate clip files, adds `duplicate_of` | `stage5a_dedupe_clips.py` |
-| 5b. Team review | Team | `area` (if empty), `google_maps_url`, missing values, `cleaned_by`, `cleaner_note`, status `verified` or `rejected` | none, edit the clip file |
+| 5b. Team review | Team | `area` (if empty), `google_maps_url`, missing values, `cleaned_by`, `cleaner_note`, status `verified` or `rejected` | edit the clip file; check it with `stage5b_validate_clips.py` |
 | 5c. Match places | Script, then team | `place_id` (never the LLM; `verified` places only), places.json | `stage5c_match_places.py` |
 | 6. Final dataset | Script | `final_dataset.json` | `stage6_build_final_dataset.py` |
 

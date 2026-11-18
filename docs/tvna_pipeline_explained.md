@@ -8,7 +8,7 @@ _For the project supervisor. Last updated: 2026-11-18._
 - **How:** AI (Google Gemini) listens to each video and finds the places. Code checks the AI's answer. **A person approves every place** before it goes on the website.
 - **Scope:** TikTok videos only. Places in Phnom Penh only.
 - **Storage:** JSON files in git. No database.
-- **Status:** all stages are built and tested. 4 real videos have been processed so far; none has been reviewed by the team yet.
+- **Status:** all stages are built and tested. 4 real videos have been processed so far; the first one has been reviewed and approved.
 
 ---
 
@@ -49,7 +49,7 @@ flowchart LR
 | 3. Transcript | Gemini | the audio | the transcript | the audio file exists |
 | 4. Find places | Gemini + code | transcript + caption | one place record per place, with a status | there is a transcript and the caption was read |
 | 5a. Duplicate check | script | all clip files | copies of a video moved aside | (always runs; a safety net) |
-| 5b. Team review | **a person** | places not checked yet | missing fields filled; status `verified` or `rejected` | a person approves the place |
+| 5b. Team review | **a person**, checked by a script | places not checked yet | missing fields filled; status `verified` or `rejected` | a person approves the place, and the check finds no mistakes |
 | 5c. Match places | script | `verified` places | a `place_id` for each; the list of real places | the status is `verified` |
 | 6. Final dataset | script | clip files + list of places | `final_dataset.json` for the website | `verified` **and** has a `place_id` |
 
@@ -68,6 +68,7 @@ All code is **Python 3.12**. Package versions are fixed in `requirements.txt` an
 | 4 | **Gemini API**, `gemini-3.6-flash`, backup `gemini-3.8-flash` | reads the transcript and caption, lists the places |
 | 4 | **pydantic** 2.14.3 | makes Gemini answer in a fixed JSON shape; a broken answer is refused |
 | 5b | **Google Maps** + a text editor | a person finds the place, its district and its Maps link |
+| 5b | Python only (`stage5b_validate_clips.py`) | checks the person's edits for mistakes; changes nothing |
 | 5c | Python `difflib` | scores how alike two names are |
 | 5a, 6 | Python only | compare and join JSON files |
 
@@ -171,8 +172,9 @@ Every stage is described the same way: what it does, input, output, when it cont
   - `flags`: what to double-check, e.g. `name_from_caption` (the name is only in the caption);
   - `google_maps_url`: always empty after stage 4; the person finds it.
 - **Steps:** check the name (swap with an alternative name if that one is right), find the place on Google Maps, take the district from the address, fill what is missing, sign with their name in `cleaned_by`, and set the status.
+- **Check:** `stage5b_validate_clips.py` reads every clip and changes nothing. It lists each place as **to review** (with what is still missing), **ready** (verified, no mistakes) or **problem**. It catches the easy mistakes of editing by hand: a misspelled status ("verfied"), a district not spelled as in `areas.json` ("7 Makara" instead of "Prampi Makara"), "nothing" instead of null, a verified place with no district, Maps link or reviewer name, and a broken file.
 - **Output:** status `verified` (approved) or `rejected`.
-- **Continues only if:** the status is `verified`.
+- **Continues only if:** the status is `verified` and the check shows no problems.
 - **Why it matters:** the AI suggests, a person decides. A misheard name can never reach the website without a person seeing it.
 
 #### Location: `area`, `area_description`, `google_maps_url`
@@ -289,16 +291,16 @@ data/
 4. **Nothing is lost.** Every name is kept, the AI's first answer is saved untouched, files are moved and never deleted, and git keeps every change.
 5. **Uncertain cases go to a person**, not a guess: unclear matches, names only in the caption, #hashtag names, unknown districts, places not found on Maps.
 6. **Small, separate stages.** Each stage prints what it did and stops, so results can be checked step by step. Running a stage again changes nothing and costs nothing.
-7. **Tested at no cost.** 323 automatic checks use a fake TikTok and a fake Gemini, and run before every update.
+7. **Tested at no cost.** 381 automatic checks use a fake TikTok and a fake Gemini, and run before every update.
 8. **Ready to measure the AI.** Gemini's saved first answer, compared with the team's corrections, will show how accurate it is.
 
 ---
 
 ## 9. Current status, limits and next steps
 
-**Built and tested:** stages 1–6. Stage 5b is done by hand, with a written checklist in the README.
+**Built and tested:** stages 1–6. Stage 5b is done by hand, with a written checklist in the README and a script that checks the review for mistakes.
 
-**Real data:** 4 videos (PP-002 to PP-005) have gone through stage 4. None has been reviewed by the team yet.
+**Real data:** 4 videos (PP-002 to PP-005) have gone through stage 4. The team review has started: PP-005 is verified; PP-002, PP-003 and PP-004 are waiting.
 
 **Decision (2026-11-18):** a place the team cannot find on Google Maps is **held back**: it stays `needs_review` with a note. It is not published (the website filters by district, so a place with no district would be hard to find) and not rejected (it may be real, just hard to find).
 
@@ -312,10 +314,9 @@ data/
 
 **Next, in order:**
 1. Stages 2–4 refuse a copied clip file before any AI call.
-2. A review helper for 5b that lists every place to check and what is missing.
-3. Learn from the team's fixes: save them, give known names to Gemini as hints, and measure accuracy on reviewed clips.
-4. An automatic Phnom Penh check in stage 4.
-5. **Next milestone:**
+2. Learn from the team's fixes: save them, give known names to Gemini as hints, and measure accuracy on reviewed clips.
+3. An automatic Phnom Penh check in stage 4.
+4. **Next milestone:**
    - **Branches:** one place, many branches, linked as one. Each branch keeps its own district and Google Maps link, so the website can show every branch's link to click. (This changes the shape of `places.json` and `final_dataset.json`, so the website team must agree first.)
    - View and like counts for ranking.
    - Automatic tests on every push.

@@ -188,15 +188,14 @@ _Last updated: 2026-11-18_
 | 3. Transcript | `stage3_transcribe.py` | ✅ |
 | 4. Places (transcript + caption, prompt v5) | `stage4_extract_places.py` | ✅ (Phnom Penh check planned) |
 | 5a. Duplicates safety net | `stage5a_dedupe_clips.py` | ✅ |
-| 5b. Team review | by hand (this README) | ✅ by hand · ⏳ helper script planned |
+| 5b. Team review | by hand, checked by `stage5b_validate_clips.py` | ✅ |
 | 5c. Match places | `stage5c_match_places.py` | ✅ |
 | 6. Final dataset | `stage6_build_final_dataset.py` | ✅ |
 
 **Coming next, in order:**
 1. Stages 2–4 refuse a clip file that is a copy of another clip (no TikTok or Gemini call)
-2. Review helper for 5b: lists every place to review and what is missing (the "validator")
-3. The improvement loop: save the team's fixes (3), give them to Gemini as hints (4), a test score (5). Done: keep Gemini's first answer (1), use the TikTok caption (2)
-4. The Phnom Penh check in stage 4
+2. The improvement loop: save the team's fixes (3), give them to Gemini as hints (4), a test score (5). Done: keep Gemini's first answer (1), use the TikTok caption (2)
+3. The Phnom Penh check in stage 4
 
 **Next milestone (noted, not built):**
 - **Branches: one place, many branches, linked as one.** Each branch keeps its own district and Google Maps link, so the website shows every branch's link to click. Today a place keeps only one Maps link. (Changes `places.json` and `final_dataset.json`: agree with the website team first.)
@@ -251,7 +250,8 @@ python stage3_transcribe.py data/clips/PP-005.json data/clips/PP-006.json       
 python stage4_extract_places.py data/clips/PP-005.json data/clips/PP-006.json   # 4.
 
 python stage5a_dedupe_clips.py data/clips/*.json           # 5a. safety net
-# 5b. team review, by hand (see Stage 5b)
+# 5b. team review, by hand (see Stage 5b), then check it:
+python stage5b_validate_clips.py data/clips/*.json         # 5b. check the review (changes nothing)
 python stage5c_match_places.py data/clips/*.json           # 5c.
 python stage6_build_final_dataset.py data/clips/*.json     # 6.
 ```
@@ -277,6 +277,7 @@ python stage3_transcribe.py $T/clips/PP-001.json --audio-dir $T/audio
 python stage4_extract_places.py $T/clips/PP-001.json --answers-dir $T/answers
 python stage5a_dedupe_clips.py $T/clips/*.json
 # 5b: open $T/clips/PP-001.json and review the place (see Stage 5b); set "verification_status": "verified"
+python stage5b_validate_clips.py $T/clips/*.json
 python stage5c_match_places.py $T/clips/*.json --places $T/places.json
 python stage6_build_final_dataset.py $T/clips/*.json --places $T/places.json --output $T/final_dataset.json
 ```
@@ -488,10 +489,26 @@ Stage 1 already stops duplicates. 5a catches what slips through, e.g. a clip fil
 ### 1. Find what to review
 
 ```sh
-grep -l -e '"needs_review"' -e '"auto_added"' data/clips/*.json
+python stage5b_validate_clips.py data/clips/*.json
 ```
 
-This lists the clip files that have places nobody checked yet. (Stage 5c also lists them under `waiting for review`.)
+It reads every clip and **changes nothing**. You'll see (real run):
+
+```
+problems (0):
+to review (3):
+  PP-002.json  "Hanjan Coffee" (needs_review): fill area, google_maps_url; check flags: name_from_caption
+  PP-003.json  "Luv selfie booth" (needs_review): fill area, google_maps_url; check flags: name_from_caption
+  PP-004.json  "Wat Botum Park" (needs_review): fill area; check flags: name_from_caption
+ready (1): verified, no problems
+  PP-005.json  "Beans Barley"
+rejected (0), not at stage 4 yet (1 clip)
+Next: python stage5c_match_places.py data/clips/*.json
+```
+
+- **to review:** nobody approved it yet; it says what to fill and which flags to check.
+- **ready:** `verified` with no mistakes; 5c will give it a `place_id`.
+- **problems:** mistakes to fix (step 4).
 
 ### 2. In each place, these fields tell you what to do
 
@@ -523,7 +540,22 @@ This lists the clip files that have places nobody checked yet. (Stage 5c also li
 
 Can't find the place on Maps? Leave `area` and `google_maps_url` as `null`, write what you tried in `cleaner_note`, and **keep the status `needs_review`** (held back, not on the website; someone can try again later).
 
-**Done =** every place is `verified` or `rejected`. Then commit, push, and run 5c.
+### 4. Check your work
+
+Run `python stage5b_validate_clips.py data/clips/*.json` again. It catches the easy mistakes of editing by hand:
+
+```
+problems (1):
+  PP-005.json  "Beans Barley"
+    - verification_status "verfied" is not a status (use rejected, needs_review, auto_added, verified). Did you mean "verified"?
+    - notes: write null, not "nothing"
+    - area "7 Makara" is not one of the 14 districts in data/areas.json. Write it exactly as there. Did you mean "Prampi Makara"?
+    - missing_fields [] doesn't match completeness 0.67. Don't edit these two: they record what stage 4 found (see data/gemini_answers/)
+```
+
+It also catches: `area` written as text instead of a list, a category not in the list, a link that isn't Google Maps, a `verified` place with no district, Maps link or `cleaned_by`, a held-back place with no `cleaner_note`, and a broken JSON file (a missing comma or quote).
+
+**Done =** `problems (0)`, and every place is `ready` (verified), `rejected`, or held back with a note. Then commit, push, and run 5c.
 
 Example, PP-002: `missing_fields: ["area"]` → find "Hanjan Coffee" on Maps → write its district in `area` and the link in `google_maps_url` → `name_from_caption`: check the video really shows Hanjan Coffee → `cleaned_by`, `"verified"`.
 
