@@ -71,6 +71,7 @@ flowchart LR
   - the evidence quote must really be in the transcript or caption;
   - a "name" that is only a #hashtag or @account is rejected;
   - a place named only in the caption is flagged (it could be a sponsor).
+- **Name rule: when the TikTok caption writes the place's name, the caption's spelling wins.** The creator types the caption, so its spelling is usually right; speech-to-text can mishear a name. The caption's spelling goes in `place_name`. Every other name (the spoken or misheard one, a Khmer name) goes in `place_name_alt`, so nothing is lost. Example: the speaker says "Hanjang Coffee & Eatery", the caption writes "Hanjan Coffee" → `place_name` = "Hanjan Coffee". A person can still change it in review (5b).
 - **Score and status:** `completeness` = how many of the 3 key fields are filled (name, district, opinion) out of 3.
 
   | Result | Status |
@@ -130,11 +131,12 @@ flowchart LR
 
 1. **People approve everything that is published.** The AI fills, the code checks, a person decides. Only `verified` places reach the website.
 2. **Duplicates are removed first**, at stage 1, so no AI calls are wasted on them.
-3. **Nothing is lost.** Every name the AI hears or reads is kept; Gemini's first answer is saved untouched; clips are moved, never deleted; every change is in git.
-4. **Uncertain cases go to a person**, not a guess: unclear place matches, names only in the caption, tag-only names, districts not on the official list.
-5. **Each stage is a small separate command** that prints what it did and stops, so results can be checked step by step. Re-running a stage changes nothing and costs nothing.
-6. **Tested without cost:** 323 automatic checks with fake TikTok and fake Gemini, run before every update. Each "already done, skip" rule is tested with filled, empty and missing values.
-7. **Built to measure itself later:** comparing Gemini's saved first answer with the team's corrections shows where the AI is wrong (planned: a score per prompt change).
+3. **The caption's spelling wins.** When the TikTok caption writes the place's name, that spelling becomes the name; the heard spelling is kept as another name for matching, never shown on the website.
+4. **Nothing is lost.** Every name the AI hears or reads is kept; Gemini's first answer is saved untouched; clips are moved, never deleted; every change is in git.
+5. **Uncertain cases go to a person**, not a guess: unclear place matches, names only in the caption, tag-only names, districts not on the official list.
+6. **Each stage is a small separate command** that prints what it did and stops, so results can be checked step by step. Re-running a stage changes nothing and costs nothing.
+7. **Tested without cost:** 323 automatic checks with fake TikTok and fake Gemini, run before every update. Each "already done, skip" rule is tested with filled, empty and missing values.
+8. **Built to measure itself later:** comparing Gemini's saved first answer with the team's corrections shows where the AI is wrong (planned: a score per prompt change).
 
 ---
 

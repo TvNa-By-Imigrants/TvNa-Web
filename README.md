@@ -390,7 +390,8 @@ Next: python stage5a_dedupe_clips.py data/clips/*.json
 ```
 
 **Names:** the creator types the caption, so its spelling is usually right; speech-to-text can mishear.
-- `place_name` = the English name if there is one, in the caption's spelling if the caption writes it.
+- **When the TikTok caption writes the place's name, the caption's spelling wins.** That spelling goes in `place_name` (the English name if there is one).
+- Example: the speaker says "Hanjang Coffee & Eatery", the caption writes "Hanjan Coffee" → `place_name` = "Hanjan Coffee".
 - `place_name_alt` = every other name said or written (e.g. the misheard "Hanjang Coffee & Eatery"). Nothing is lost; the team picks in 5b.
 - A place named only in the caption gets the flag `name_from_caption`. Sponsors, @accounts and #hashtags are not places (`name_is_tag`, `rejected`).
 - `[no speech]` clip with a caption → read from the caption. No caption either → skipped.
@@ -506,7 +507,7 @@ Only `verified` places with a `place_id` are published. It warns about the rest,
 - Missing = `null`. Never `""`, "N/A" or "Unknown".
 - Districts exactly as in `data/areas.json` ("Boeung Keng Kang" ≠ "Boeng Keng Kang").
 - Only a person sets `verified`. Only `verified` places get a `place_id` and reach the website.
-- One name per place on the website. Other names are kept for matching only.
+- The caption's spelling of a name wins over the spoken one. One name per place on the website; other names are kept for matching only.
 - Never edit `data/gemini_answers/`. Clips are never deleted, only moved to `duplicates/` (5a).
 
 **Git and safety**
