@@ -154,7 +154,48 @@ Why the Maps link matters: stage 5c matches places by Maps link first, so two vi
 
 ---
 
-## 4. One video, start to finish (real clip PP-002)
+## 4. Where files go when a condition is not met
+
+```
+data/
+├── clips/                ← every collected video, whatever its status
+│   └── duplicates/       ← second copies of a video (moved by 5a, never deleted)
+├── audio/                ← WAVs from stage 2 (on each computer, not in git)
+├── gemini_answers/       ← Gemini's first answer per clip (never edited)
+├── areas.json            ← the 14 districts (fixed)
+├── places.json           ← one entry per real place (only verified places)
+└── final_dataset.json    ← the website file (only verified places with a place_id)
+```
+
+**Status lives inside the clip file, not in folders.** One video can show several places, and each place has its own status (one `verified`, another `rejected`). So the clip file stays in `data/clips/`, and each place carries its own `verification_status`. Only whole-file duplicates move to another folder.
+
+| Condition | What happens | Where the file is |
+|---|---|---|
+| **Bad link** (not TikTok, short link can't be opened) | stage 1 lists it under "bad links"; no file | nowhere: it never enters |
+| **Duplicate found in stage 1** | stage 1 lists it as "same video as PP-00N"; no file | nowhere: no file, no AI cost |
+| **Duplicate found later** (e.g. a file copied by hand) | 5a keeps the real one and moves the copy, adding `"duplicate_of": "PP-00N"` | `data/clips/duplicates/` (stage 1 still sees it, so the video is never collected again) |
+| **A stage fails** (download failed, Gemini busy, video deleted) | the clip is not changed; the reason is printed; run the stage again later | `data/clips/`, stuck at the last stage that worked |
+| **No speech and no caption** | stage 4 has nothing to read, so it skips the clip | `data/clips/`, no places |
+| **`rejected`** (no name, only a #tag, not a place, outside Phnom Penh) | kept in the clip, never deleted; skipped by 5c and 6 | `data/clips/` (status inside) |
+| **`needs_review` / `auto_added`** (not checked by a person yet) | 5c lists it as "waiting for review"; 6 leaves it out | `data/clips/` (status inside) |
+| **Not found on Google Maps** | stays `needs_review` with a `cleaner_note` (held back) | `data/clips/` (status inside) |
+| **`verified`, but unclear match** | 5c leaves `place_id` null and suggests one; a person decides | `data/clips/`; not in `places.json` yet |
+| **`verified` and matched** | gets a `place_id`; published | clip in `data/clips/` + entry in `places.json` + record in `final_dataset.json` |
+
+**Nothing is ever deleted** by the pipeline: rejected places stay in their clip, duplicates are moved, and git keeps every earlier version. To undo a duplicate move, move the file back.
+
+**To find places by status:**
+
+```sh
+grep -l '"needs_review"' data/clips/*.json     # waiting for a person
+grep -l '"rejected"' data/clips/*.json         # rejected places
+grep -l '"verified"' data/clips/*.json         # approved
+ls data/clips/duplicates/                      # duplicates
+```
+
+---
+
+## 5. One video, start to finish (real clip PP-002)
 
 | Stage | Result |
 |---|---|
@@ -167,7 +208,7 @@ Why the Maps link matters: stage 5c matches places by Maps link first, so two vi
 
 ---
 
-## 5. Key takeaways
+## 6. Key takeaways
 
 1. **People approve everything that is published.** The AI fills, the code checks, a person decides. Only `verified` places reach the website.
 2. **Duplicates are removed first**, at stage 1, so no AI calls are wasted on them.
@@ -180,7 +221,7 @@ Why the Maps link matters: stage 5c matches places by Maps link first, so two vi
 
 ---
 
-## 6. Current status and limits
+## 7. Current status and limits
 
 **Built and tested:** all stages (1–6). Stage 5b is done by hand with a written checklist.
 

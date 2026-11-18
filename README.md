@@ -292,6 +292,13 @@ TvNa-Web/
 
 There is no database: these JSON files in git **are** the data. `git pull` gives you everyone's clips.
 
+**When a condition is not met, where does the file go?**
+- **Bad link, or a duplicate in stage 1:** no file is made at all.
+- **Duplicate found later (5a):** the copy moves to `data/clips/duplicates/`.
+- **Everything else stays in `data/clips/`.** The status is written **inside** the file, per place (`rejected`, `needs_review`, `auto_added`, `verified`), because one video can have several places with different statuses. A stage that fails leaves the clip unchanged.
+- Nothing is ever deleted. Only `verified` places reach `places.json` and `final_dataset.json`.
+- Full table, case by case: [docs/tvna_pipeline_explained.md, section 4](docs/tvna_pipeline_explained.md#4-where-files-go-when-a-condition-is-not-met).
+
 ---
 
 ## Stage 1: add videos
