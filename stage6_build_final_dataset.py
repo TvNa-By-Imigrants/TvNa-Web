@@ -8,7 +8,7 @@ Each place gets one name, place_name from places.json; other names
 (aliases, place_name_alt) stay in the pipeline for matching and are not published.
 
 Usage:
-    python stage6_build_final_dataset.py data/clips/*.json   # -> data/final_dataset.json
+    python stage6_build_final_dataset.py data/clips/*.json   # -> data/results/final_dataset.json
 """
 import argparse
 import json
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from tvna_common import (
     AREAS_FILE,
-    DATA_DIR,
+    FINAL_DATASET_FILE,
     PLACES_FILE,
     is_rejected,
     is_verified,
@@ -61,7 +61,7 @@ def main():
     ap.add_argument("clips", nargs="+", help="Clip JSON files")
     ap.add_argument("--places", default=PLACES_FILE)
     ap.add_argument("--areas", default=AREAS_FILE)
-    ap.add_argument("--output", default=DATA_DIR / "final_dataset.json")
+    ap.add_argument("--output", default=FINAL_DATASET_FILE)
     args = ap.parse_args()
 
     places = {e["place_id"]: e for e in load_json(args.places)}

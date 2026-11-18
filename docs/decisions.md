@@ -4,6 +4,14 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-18: data/ is grouped by what the files are
+
+**Decision:** `areas.json` moved to `data/reference/` (fixed lists, set once). `places.json` and `final_dataset.json` moved to `data/results/` (made by stages 5c and 6). `clips/`, `audio/` and `gemini_answers/` stay as they are.
+
+**Why:** the files sat loose in `data/` next to the folders, so it was hard to see which ones are inputs and which ones the scripts make.
+
+**Note for the website team:** read `data/results/final_dataset.json` (was `data/final_dataset.json`).
+
 ## 2026-11-18: A checker for the team review (5b)
 
 **Decision:** `stage5b_validate_clips.py` checks the team's hand edits before stage 5c. It only reads the clip files and never changes them. It lists each place as a problem, to review, or ready, and exits with an error when there is a problem.

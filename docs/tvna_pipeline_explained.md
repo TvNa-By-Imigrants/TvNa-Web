@@ -24,7 +24,7 @@ _For the project supervisor. Last updated: 2026-11-18._
 | **`place_id`** | the ID of a real place, e.g. `tvna_p_0001`. Two videos about the same café get the same `place_id` |
 | **caption** | the text the creator typed under the TikTok video |
 | **transcript** | the words spoken in the video, written down by Gemini |
-| **district** | one of Phnom Penh's 14 districts, from the fixed list `data/areas.json` |
+| **district** | one of Phnom Penh's 14 districts, from the fixed list `data/reference/areas.json` |
 
 ---
 
@@ -181,7 +181,7 @@ Every stage is described the same way: what it does, input, output, when it cont
 
 | Field | What it holds | Who fills it |
 |---|---|---|
-| `area` | the **district**, written exactly as in `data/areas.json` | stage 4, but only if the video or caption names a district; otherwise the person |
+| `area` | the **district**, written exactly as in `data/reference/areas.json` | stage 4, but only if the video or caption names a district; otherwise the person |
 | `area_description` | any words about the location: a street, a landmark, a neighborhood, "📍…" | stage 4 |
 | `google_maps_url` | the Google Maps Share link | **always the person** (the AI never fills it) |
 
@@ -200,14 +200,14 @@ What the person does, case by case:
 
 ### Stage 5c: Match places (`place_id`)
 
-- **What it does:** many videos show the same café, often with different spellings. 5c gives each `verified` place a `place_id`, and keeps one list of real places, `data/places.json`, with all their names. It checks in this order:
+- **What it does:** many videos show the same café, often with different spellings. 5c gives each `verified` place a `place_id`, and keeps one list of real places, `data/results/places.json`, with all their names. It checks in this order:
   1. same Google Maps link → same place;
   2. same name, or a name already known for that place → same place;
   3. names 95% alike (not used for Khmer names) → same place, and the new spelling is remembered;
   4. names 75–94% alike, or a close Khmer name → **unclear**: a person decides;
   5. anything else → a new place.
 - **Input:** `verified` places.
-- **Output:** a `place_id` in each place record, and `data/places.json`.
+- **Output:** a `place_id` in each place record, and `data/results/places.json`.
 - **If not verified:** the place is listed as "waiting for review" and nothing changes.
 - **Why it matters:** when unsure, it asks a person instead of guessing. Every confirmed name is remembered, so the next video with that spelling matches at once.
 
@@ -229,7 +229,7 @@ Example: "Hanjan Coffee" (from the caption) and "Hanjang Coffee & Eatery" (as he
 
 - **What it does:** joins all clips by `place_id` into **one record per place**: one name, its categories, districts and menu items, every creator's opinion, and `popularity` (the number of **different creators** who posted about it).
 - **Input:** the clip files, `places.json` and `areas.json`.
-- **Output:** `data/final_dataset.json`, the file the website uses.
+- **Output:** `data/results/final_dataset.json`, the file the website uses.
 - **Continues only if:** the place is `verified` and has a `place_id`.
 - **If not:** the place is left out, and a warning says why. Warnings also show where clips disagree (e.g. two different price ranges).
 - **Why it matters:** the website shows one name per place. Other spellings stay inside the pipeline, for matching only.
@@ -253,13 +253,15 @@ Example: "Hanjan Coffee" (from the caption) and "Hanjang Coffee & Eatery" (as he
 
 ```
 data/
+├── reference/            ← fixed lists, set once
+│   └── areas.json        ← the 14 districts
 ├── clips/                ← every collected video, whatever its status
 │   └── duplicates/       ← copies of a video (moved by 5a, never deleted)
 ├── audio/                ← audio files from stage 2 (on each computer, not in git)
 ├── gemini_answers/       ← Gemini's first answer for each clip (never edited)
-├── areas.json            ← the 14 districts (fixed)
-├── places.json           ← one entry per real place (verified places only)
-└── final_dataset.json    ← the website file (verified places with a place_id only)
+└── results/              ← made by the scripts
+    ├── places.json       ← one entry per real place (verified places only), made by 5c
+    └── final_dataset.json ← the website file (verified places with a place_id only), made by 6
 ```
 
 **The status is written inside the clip file, not shown by folders.** One video can show several places, and each place can have a different status (one `verified`, another `rejected`). So the clip file stays in `data/clips/`. Only whole-file duplicates move to another folder.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage 5b helper: check the team's review before stage 5c. Reads the clip files and changes nothing.
 Lists, per place:
-- problems: mistakes to fix, e.g. a misspelled status ("verfied"), a district that is not in data/areas.json,
+- problems: mistakes to fix, e.g. a misspelled status ("verfied"), a district that is not in data/reference/areas.json,
   "nothing" or "" instead of null, a verified place with no district, Maps link or reviewer name;
 - to review: places nobody has approved yet, with what is still missing;
 - ready: verified places with no problems (stage 5c will give them a place_id).
@@ -71,7 +71,7 @@ def check_place(place: dict, areas: List[dict]) -> List[str]:
     names = [a["district"] for a in areas] + [a["district_km"] for a in areas]
     for value in as_list(area):
         if isinstance(value, str) and value.strip().lower() not in PLACEHOLDERS and not match_district(value, areas):
-            problems.append(f'area "{value}" is not one of the 14 districts in data/areas.json. '
+            problems.append(f'area "{value}" is not one of the 14 districts in data/reference/areas.json. '
                             f"Write it exactly as there.{close_to(value, names)}")
 
     category = place.get("category")

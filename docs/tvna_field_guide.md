@@ -5,6 +5,7 @@ We use **4 kinds of JSON files**. This guide shows each one **in full**, with th
 - The full process is in the Google Doc "TVNA Data Pipeline".
 - How the files connect: `docs/tvna_data_model.mmd`.
 - The scripts are in the repo root (`stage1_new_clip.py` … `stage6_build_final_dataset.py`); empty templates are in `templates/`.
+- Where the files are: clip files in `data/clips/`, `areas.json` in `data/reference/`, `places.json` and `final_dataset.json` in `data/results/`.
 - How to run each stage, and the team review steps: the [README](../README.md).
 
 Missing information is always `null` (never `""`, "N/A" or "Unknown").

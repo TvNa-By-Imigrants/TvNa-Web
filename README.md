@@ -9,7 +9,7 @@
 
 ## Data pipeline
 
-Turns **TikTok videos about places in Phnom Penh** into `data/final_dataset.json`: one record per place, for the TvNa website.
+Turns **TikTok videos about places in Phnom Penh** into `data/results/final_dataset.json`: one record per place, for the TvNa website.
 
 **Scope:** TikTok videos only. Places in Phnom Penh only.
 
@@ -29,7 +29,7 @@ Turns **TikTok videos about places in Phnom Penh** into `data/final_dataset.json
 | **`place_id`** | the ID of a real place, e.g. `tvna_p_0001`. Two videos about the same café get the same one |
 | **caption** | the text the creator typed under the TikTok video |
 | **transcript** | the words spoken in the video, written down by Gemini |
-| **district** | one of Phnom Penh's 14 districts, from `data/areas.json` |
+| **district** | one of Phnom Penh's 14 districts, from `data/reference/areas.json` |
 
 ---
 
@@ -51,8 +51,8 @@ Each video is **one clip file**, `data/clips/PP-001.json`. Every stage reads it,
 | **4. Places** | Gemini + code | `stt.transcript` + `source.caption` | in the clip: `fields` (one object per place) and `extraction`; a copy in `data/gemini_answers/PP-NNN.json` |
 | **5a. Duplicates** | script | all clip files | moves a second copy of a video to `data/clips/duplicates/` (safety net; stage 1 already stops most) |
 | **5b. Team review** | **people** | places that are not `verified` yet | fills what is missing, then sets `verification_status` to `verified` or `rejected` |
-| **5c. Match** | script | `verified` places | `fields[].place_id` in the clip; `data/places.json` (one entry per real place) |
-| **6. Final dataset** | script | clips + `places.json` + `areas.json` | `data/final_dataset.json` (only `verified` places) |
+| **5c. Match** | script | `verified` places | `fields[].place_id` in the clip; `data/results/places.json` (one entry per real place) |
+| **6. Final dataset** | script | clips + `places.json` + `areas.json` | `data/results/final_dataset.json` (only `verified` places) |
 
 Stages 2, 3 and 4 cost time and Gemini tokens, so duplicates are stopped **before** them, in stage 1.
 
@@ -124,9 +124,9 @@ Each file type has an empty template in `templates/`. You never copy them by han
 |---|---|---|---|
 | `tvna_clip_template.json` | one clip file per video, `data/clips/PP-NNN.json` | stage 1 copies it | stages 2, 3, 4 fill it; 5b people fix it; 5c adds `place_id`; 6 reads it |
 | `tvna_clip_place_template.json` | one object in a clip's `fields` list (one per place in the video) | stage 4 | 5b, 5c, 6 |
-| `tvna_places_template.json` | `data/places.json`: one entry per **real** place | stage 5c | stage 6 (the website name) |
-| `tvna_areas_template.json` | `data/areas.json`: the 14 districts (fixed, nobody runs it) | the team, once | stages 4, 5c, 6 check districts against it |
-| `tvna_final_dataset_template.json` | `data/final_dataset.json`: one record per place, for the website | stage 6 | the website |
+| `tvna_places_template.json` | `data/results/places.json`: one entry per **real** place | stage 5c | stage 6 (the website name) |
+| `tvna_areas_template.json` | `data/reference/areas.json`: the 14 districts (fixed, nobody runs it) | the team, once | stages 4, 5c, 6 check districts against it |
+| `tvna_final_dataset_template.json` | `data/results/final_dataset.json`: one record per place, for the website | stage 6 | the website |
 
 ```
 clip file (one per video) ──5c──► places.json (one per real place) ──6──► final_dataset.json (website)
@@ -152,8 +152,8 @@ PP-003.json  "Luv selfie booth"                            ───► tvna_p_0
 
 **Where it lives:** the same `place_id` is written in 3 files:
 - the clip: `fields[].place_id` (which shop is this place?)
-- `data/places.json`: the shop itself: website name, all other names (`aliases`), districts, Maps link
-- `data/final_dataset.json`: one record per `place_id`
+- `data/results/places.json`: the shop itself: website name, all other names (`aliases`), districts, Maps link
+- `data/results/final_dataset.json`: one record per `place_id`
 
 **Who sets it:** only stage 5c, and only for `verified` places. Gemini never does. You type one only when 5c asks (below).
 
@@ -171,8 +171,8 @@ Every name that gets a `place_id` is added to that place's `aliases`, so next ti
 
 **What you do:**
 - **Unclear:** write the suggested id in the clip's `place_id` if it's the same shop, or `"new"` if it's a different one. Run 5c again.
-- **Wrong match** (two different shops got one id): in the clip, write `"new"` (or the right id) in `place_id`, **and** in `data/places.json` remove the wrong name from the old place's `aliases`. If you skip the second part, the next video with that name comes out "unclear" (checked: `candidates tvna_p_0001, tvna_p_0003`).
-- **Change the website name:** edit `place_name` in `data/places.json`. Keep the old name in `aliases`.
+- **Wrong match** (two different shops got one id): in the clip, write `"new"` (or the right id) in `place_id`, **and** in `data/results/places.json` remove the wrong name from the old place's `aliases`. If you skip the second part, the next video with that name comes out "unclear" (checked: `candidates tvna_p_0001, tvna_p_0003`).
+- **Change the website name:** edit `place_name` in `data/results/places.json`. Keep the old name in `aliases`.
 - **Branches** of one shop are one place, with each branch's district in `area`. Same name but a different Maps link → 5c says **unclear** ("another branch or a different place?"): write the existing id for a branch, `"new"` for a different shop. **Limit:** the place keeps only its **first** Maps link; other branches' links stay only in their clips (next milestone: one link per branch).
 
 ---
@@ -322,13 +322,15 @@ TvNa-Web/
 ├── requirements.txt / requirements.lock.txt              ← packages (install from the lock file)
 ├── .env.example                  ← copy to .env, add your key
 ├── data/
-│   ├── clips/                    ← one file per video: PP-001.json …
+│   ├── reference/                ← fixed lists, set once
+│   │   └── areas.json            ← the 14 Phnom Penh districts
+│   ├── clips/                    ← one file per video: PP-001.json … (stages 1–5b work here)
 │   │   └── duplicates/           ← second copies of a video (still count as "already collected")
 │   ├── audio/                    ← WAVs from stage 2 (not in git)
 │   ├── gemini_answers/           ← Gemini's first answer from stage 4 (never edit)
-│   ├── areas.json                ← the 14 Phnom Penh districts (fixed)
-│   ├── places.json               ← made by 5c
-│   └── final_dataset.json        ← made by 6
+│   └── results/                  ← made by the scripts
+│       ├── places.json           ← made by 5c (one entry per real place; the team may edit names here)
+│       └── final_dataset.json    ← made by 6 (the website reads this)
 ├── templates/                    ← empty JSON templates
 ├── docs/                         ← field guide, decisions, diagrams
 └── tests/                        ← offline checks: python tests/run_all.py
@@ -533,7 +535,7 @@ Next: python stage5c_match_places.py data/clips/*.json
 
 1. **Name:** is `place_name` right? If a name in `place_name_alt` is better, swap them. Keep the wrong spelling in `place_name_alt` (it helps match future clips). This becomes the website name.
 2. **Google Maps:** search the place, check name and photos, copy the Share link into `google_maps_url`.
-3. **District:** from the Maps address, write it in `area` as a list, spelled exactly as in `data/areas.json`, e.g. `["Chamkar Mon"]`. Branches: one district each. A neighborhood like "BKK1" or "Toul Tompoung" is not a district; it stays in `area_description`.
+3. **District:** from the Maps address, write it in `area` as a list, spelled exactly as in `data/reference/areas.json`, e.g. `["Chamkar Mon"]`. Branches: one district each. A neighborhood like "BKK1" or "Toul Tompoung" is not a district; it stays in `area_description`.
 4. **Other missing fields:** fill only what the video or caption says. Unknown stays `null`.
 5. **Sign it:** your name in `cleaned_by`, a short note in `cleaner_note` (e.g. "district from Google Maps").
 6. **Status:** `"verified"` (correct, goes to the website) or `"rejected"` (not a place, not in Phnom Penh, or wrong).
@@ -549,7 +551,7 @@ problems (1):
   PP-005.json  "Beans Barley"
     - verification_status "verfied" is not a status (use rejected, needs_review, auto_added, verified). Did you mean "verified"?
     - notes: write null, not "nothing"
-    - area "7 Makara" is not one of the 14 districts in data/areas.json. Write it exactly as there. Did you mean "Prampi Makara"?
+    - area "7 Makara" is not one of the 14 districts in data/reference/areas.json. Write it exactly as there. Did you mean "Prampi Makara"?
     - missing_fields [] doesn't match completeness 0.67. Don't edit these two: they record what stage 4 found (see data/gemini_answers/)
 ```
 
@@ -563,7 +565,7 @@ Example, PP-002: `missing_fields: ["area"]` → find "Hanjan Coffee" on Maps →
 
 ## Stage 5c: match places
 
-**In:** `verified` places. **Out:** a `place_id` for each, and `data/places.json` (one entry per real place, with all its names in `aliases`).
+**In:** `verified` places. **Out:** a `place_id` for each, and `data/results/places.json` (one entry per real place, with all its names in `aliases`).
 
 So two clips about the same café count as **one place**. How it decides, and what to do with **unclear** or a **wrong match**: [How `place_id` works](#how-place_id-works).
 
@@ -581,7 +583,7 @@ waiting for review (1):
 
 ## Stage 6: final dataset
 
-**In:** clips + `places.json` + `areas.json`. **Out:** `data/final_dataset.json`, one record per place:
+**In:** clips + `places.json` + `areas.json`. **Out:** `data/results/final_dataset.json`, one record per place:
 
 - **one name** (`place_name` from places.json); other names never reach the website
 - `category`, `price_range`, `area`, `opening_hours`, `menu_items`: every different value from all clips
@@ -590,7 +592,7 @@ waiting for review (1):
 
 Only `verified` places with a `place_id` are published. It warns about the rest, and when clips disagree (e.g. two price ranges). It rebuilds the file from scratch each time.
 
-> **Website team:** `final_dataset.json` has **no `place_name_alt`** (since 2026-11-17). Use `place_name`. Fields: `templates/tvna_final_dataset_template.json`.
+> **Website team:** since 2026-11-18 the file is at **`data/results/final_dataset.json`** (it was `data/final_dataset.json`). It has **no `place_name_alt`** (since 2026-11-17). Use `place_name`. Fields: `templates/tvna_final_dataset_template.json`.
 
 ---
 
@@ -602,7 +604,7 @@ Only `verified` places with a `place_id` are published. It warns about the rest,
 
 **Data**
 - Missing = `null`. Never `""`, "N/A" or "Unknown".
-- Districts exactly as in `data/areas.json` ("Boeung Keng Kang" ≠ "Boeng Keng Kang").
+- Districts exactly as in `data/reference/areas.json` ("Boeung Keng Kang" ≠ "Boeng Keng Kang").
 - Only a person sets `verified`. Only `verified` places get a `place_id` and reach the website.
 - The caption's spelling of a name wins over the spoken one. One name per place on the website; other names are kept for matching only.
 - Never edit `data/gemini_answers/`. Clips are never deleted, only moved to `duplicates/` (5a).

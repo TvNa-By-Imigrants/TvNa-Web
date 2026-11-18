@@ -16,8 +16,11 @@ from urllib.parse import urljoin, urlsplit
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 TEMPLATES_DIR = BASE_DIR / "templates"
-AREAS_FILE = DATA_DIR / "areas.json"
-PLACES_FILE = DATA_DIR / "places.json"
+REFERENCE_DIR = DATA_DIR / "reference"  # fixed lists, set once
+RESULTS_DIR = DATA_DIR / "results"  # made by stages 5c and 6
+AREAS_FILE = REFERENCE_DIR / "areas.json"
+PLACES_FILE = RESULTS_DIR / "places.json"
+FINAL_DATASET_FILE = RESULTS_DIR / "final_dataset.json"
 CLIPS_DIR = DATA_DIR / "clips"
 AUDIO_DIR = DATA_DIR / "audio"
 GEMINI_ANSWERS_DIR = DATA_DIR / "gemini_answers"  # stage 4's places exactly as Gemini gave them, never edited
@@ -61,6 +64,7 @@ def load_json(path):
 
 
 def save_json(path, data) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
