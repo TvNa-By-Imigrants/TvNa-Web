@@ -167,6 +167,8 @@ data/
 └── final_dataset.json    ← the website file (only verified places with a place_id)
 ```
 
+**`data/gemini_answers/`: the AI's untouched answer.** Stage 4 saves one file per clip with the places exactly as Gemini (plus the code's checks) gave them, before any person edits them. After the team review, comparing this file with the reviewed clip shows exactly what the AI got wrong (names, categories, districts). No stage reads it yet, so it doesn't affect the website; it is the basis for the planned improvement loop: save the team's fixes, give known names to Gemini as hints, and score accuracy after each prompt change. Rule: never edit it. Once a clip is reviewed, stage 4 never redoes it, so the copy stays.
+
 **Status lives inside the clip file, not in folders.** One video can show several places, and each place has its own status (one `verified`, another `rejected`). So the clip file stays in `data/clips/`, and each place carries its own `verification_status`. Only whole-file duplicates move to another folder.
 
 | Condition | What happens | Where the file is |

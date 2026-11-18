@@ -411,6 +411,19 @@ Next: python stage5a_dedupe_clips.py data/clips/*.json
 | 1 or 2 of the 3 filled | `needs_review` |
 | All 3 filled | `auto_added` (still needs a person to check) |
 
+### `data/gemini_answers/`: Gemini's first answer
+
+One file per clip (`PP-002.json`): the places **exactly as stage 4 made them**, before any person touches them. Nobody ever edits it.
+
+```
+data/gemini_answers/PP-002.json   ← what Gemini said (before review)
+data/clips/PP-002.json            ← after the team fixed it in 5b
+```
+
+- **Why:** after 5b the clip file no longer shows what Gemini got wrong. Comparing the two files does, e.g. "Gemini said `area: null`, the team wrote the district".
+- **Used by:** nothing yet. Stages 5–6 don't read it, so it doesn't change the website. It's for the improvement loop (Coming next): save the team's fixes, give known names to Gemini as hints, and score Gemini's accuracy.
+- **Rules:** never edit it (the "before" copy would be lost). It's in git. Stage 4 `--force` writes a new one, but a clip the team already reviewed is never redone, so its copy stays.
+
 ---
 
 ## Stage 5a: duplicates safety net
