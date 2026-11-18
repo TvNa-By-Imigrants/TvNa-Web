@@ -50,7 +50,7 @@ One real clip, PP-002. Each stage adds these parts (everything else stays `null`
 |---|---|
 | 1 | `clip_id: "PP-002"`, `source.url`, `source.video_id`, `source.platform`, `source.creator`, `source.collected_at` |
 | 2 | `audio_file`, `source.caption` ("…dope Tteobokki… 🛵Hanjan Coffee"), `source.posted_at` |
-| 3 | `stt.transcript` (37 lines), `stt.model` |
+| 3 | `stt.transcript` (30 lines), `stt.model` |
 | 4 | `extraction` (model, `prompt_version: "v5"`) and `fields`: one place, below |
 | 5b | the team fills `area`, `google_maps_url`, `cleaned_by`, sets `verification_status: "verified"` |
 | 5c | `fields[0].place_id: "tvna_p_0001"` |
@@ -518,6 +518,7 @@ Only `verified` places with a `place_id` are published. It warns about the rest,
 
 ## More detail
 
+- [`docs/tvna_pipeline_explained.md`](docs/tvna_pipeline_explained.md): the whole pipeline on 4 pages (for the supervisor): each stage, its gate, key takeaways, limits.
 - [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md): every field, who fills it, value rules, category list.
 - [`docs/decisions.md`](docs/decisions.md): key decisions and why.
 - [`docs/tvna_data_model.mmd`](docs/tvna_data_model.mmd): how the JSON files connect (the `.png` picture is older: it still shows `place_name_alt` in the final dataset).
