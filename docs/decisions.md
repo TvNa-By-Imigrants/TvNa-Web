@@ -73,6 +73,8 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 **Decision:** `final_dataset.json` gets one `place_name` per place, with no `place_name_alt` (plan step D, done). Other names stay as `aliases` in `places.json`, for matching future clips.
 
+**Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in places.json.
+
 - The published name is `place_name` in places.json. Stage 5c sets it from the clip that creates the place, so the team picks the right name in 5b before 5c. To change it later, edit places.json; the old name is already in `aliases`.
 - An empty name is published as `null` with a warning. Stage 6 never takes an alias instead, because an alias may be a misheard name.
 - When a clip calls a known place something else, 5c says once which name the website keeps (`website name stays "…"`). A stage 6 warning on every run was tried first, but it fired for every correct Khmer name or other spelling, so it was dropped.

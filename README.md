@@ -159,7 +159,7 @@ PP-003.json  "Luv selfie booth"                            ───► tvna_p_0
 
 **Before matching:** only `verified` places are matched. `rejected` places and places that already have a `place_id` are skipped; every other status is listed as "waiting for review" and nothing changes. A `place_id` written by the team that isn't in places.json is reported as `unknown_id`.
 
-**What is compared:** the clip's `place_name` **and** every name in `place_name_alt`, against each place's `place_name` **and** every name in `aliases` in places.json. Before comparing, names are cleaned: capitals, spaces, punctuation and accents don't matter, `&` = `and`, `ឲ` = `ឱ`.
+**Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in places.json. Before comparing, names are cleaned: capitals, spaces, punctuation and accents don't matter, `&` = `and`, `ឲ` = `ឱ`.
 
 **How 5c decides** (each `verified` place, in order; the first check that fits wins):
 

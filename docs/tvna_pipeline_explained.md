@@ -200,12 +200,13 @@ What the person does, case by case:
 
 ### Stage 5c: Match places (`place_id`)
 
-- **What it does:** many videos show the same café, often with different spellings. 5c gives each `verified` place a `place_id`, and keeps one list of real places, `data/results/places.json`, with all their names. It compares the clip's name **and** its other names with every name known for each place (capitals, spaces and punctuation don't matter). It checks in this order:
+- **What it does:** many videos show the same café, often with different spellings. 5c gives each `verified` place a `place_id`, and keeps one list of real places, `data/results/places.json`, with all their names. It checks in this order:
   1. same Google Maps link → same place (if it matches two places → unclear);
   2. same name, or a name already known for that place → same place (if two places have that name, or the Maps link is different, e.g. another branch → unclear);
   3. names 95% alike (not used for Khmer names) → same place, and the new spelling is remembered;
   4. names 75–94% alike, one name inside the other, or a close Khmer name → **unclear**: 5c suggests up to 3 places and a person decides;
   5. anything else → a new place.
+- **Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in places.json. Capitals, spaces and punctuation don't matter.
 - **Input:** `verified` places.
 - **Output:** a `place_id` in each place record, and `data/results/places.json`.
 - **If not verified:** the place is listed as "waiting for review" and nothing changes.

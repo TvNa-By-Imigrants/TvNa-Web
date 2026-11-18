@@ -325,7 +325,9 @@ The same video must not be counted twice in `popularity`, and must not cost Gemi
 
 ## 8. Matching places (stage 5c)
 
-How a `verified` place gets its `place_id` (`stage5c_match_places.py`). Names are compared after cleaning (Unicode NFC, no spaces or punctuation, lowercase). `place_name` and `place_name_alt` are compared with `place_name` and `aliases` of every entry in places.json:
+How a `verified` place gets its `place_id` (`stage5c_match_places.py`).
+
+**Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in places.json. Names are cleaned first (Unicode NFC, no spaces or punctuation, lowercase). In order:
 
 1. Same Google Maps link → matched.
 2. Same name or alias → matched.
