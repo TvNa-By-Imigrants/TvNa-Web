@@ -173,7 +173,7 @@ Every name that gets a `place_id` is added to that place's `aliases`, so next ti
 - **Unclear:** write the suggested id in the clip's `place_id` if it's the same shop, or `"new"` if it's a different one. Run 5c again.
 - **Wrong match** (two different shops got one id): in the clip, write `"new"` (or the right id) in `place_id`, **and** in `data/places.json` remove the wrong name from the old place's `aliases`. If you skip the second part, the next video with that name comes out "unclear" (checked: `candidates tvna_p_0001, tvna_p_0003`).
 - **Change the website name:** edit `place_name` in `data/places.json`. Keep the old name in `aliases`.
-- **Branches** of one shop are one place, with each branch's district in `area`.
+- **Branches** of one shop are one place, with each branch's district in `area`. Same name but a different Maps link → 5c says **unclear** ("another branch or a different place?"): write the existing id for a branch, `"new"` for a different shop. **Limit:** the place keeps only its **first** Maps link; other branches' links stay only in their clips (next milestone: one link per branch).
 
 ---
 
@@ -198,7 +198,11 @@ _Last updated: 2026-11-18_
 3. The improvement loop: save the team's fixes (3), give them to Gemini as hints (4), a test score (5). Done: keep Gemini's first answer (1), use the TikTok caption (2)
 4. The Phnom Penh check in stage 4
 
-**Next milestone (noted, not built):** view/like/comment/share counts; every plan follows one real clip through all stages; GitHub runs the tests on every push (CI changes only with the team's OK).
+**Next milestone (noted, not built):**
+- **Branches: one place, many branches, linked as one.** Each branch keeps its own district and Google Maps link, so the website shows every branch's link to click. Today a place keeps only one Maps link. (Changes `places.json` and `final_dataset.json`: agree with the website team first.)
+- View/like/comment/share counts.
+- Every plan follows one real clip through all stages.
+- GitHub runs the tests on every push (CI changes only with the team's OK).
 
 ---
 

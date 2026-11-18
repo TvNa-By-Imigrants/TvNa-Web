@@ -209,6 +209,20 @@ What the person does, case by case:
 - **If not verified:** the place is listed as "waiting for review" and nothing changes.
 - **Why it matters:** when unsure, it asks a person instead of guessing. Every confirmed name is remembered, so the next video with that spelling matches at once.
 
+#### Other names and branches
+
+**Other names.** One place often has several names: an English and a Khmer name, a misheard spelling, a short form.
+- In a clip file, stage 4 keeps every other name in `place_name_alt`.
+- In `places.json`, 5c keeps every name it has seen for that place in `aliases`.
+- These names are used **only for matching**, so the next video with any of them joins the same place. The website shows one name: `place_name` in `places.json`.
+
+Example: "Hanjan Coffee" (from the caption) and "Hanjang Coffee & Eatery" (as heard) are both in `aliases`, so a future video with either name gets the same `place_id`.
+
+**Branches (today).** A shop with several branches is **one place** with one `place_id`.
+- When a video shows a known name but a **different** Maps link, 5c doesn't guess. It marks it "unclear: another branch, or a different place?". A person writes the existing `place_id` (a branch) or `"new"` (a different shop).
+- Each branch's district is added to the place's `area` list.
+- **Limit:** a place keeps only **one** Maps link (the first one). Another branch's link stays only in its own clip file, so the website shows one link. Planned for the next milestone (section 9).
+
 ### Stage 6: Final dataset
 
 - **What it does:** joins all clips by `place_id` into **one record per place**: one name, its categories, districts and menu items, every creator's opinion, and `popularity` (the number of **different creators** who posted about it).
@@ -294,10 +308,14 @@ data/
 - Two people collecting on different computers at the same time can get the same clip number. Team rule: `git pull` first, push soon after.
 - Gemini is often busy (errors 503 and 504). Stages 3 and 4 then wait or switch model, which can take minutes.
 - Fixing a wrong place match needs two manual edits (the clip file and `places.json`).
+- A place with several branches keeps only one Google Maps link.
 
 **Next, in order:**
 1. Stages 2–4 refuse a copied clip file before any AI call.
 2. A review helper for 5b that lists every place to check and what is missing.
 3. Learn from the team's fixes: save them, give known names to Gemini as hints, and measure accuracy on reviewed clips.
 4. An automatic Phnom Penh check in stage 4.
-5. Later: view and like counts for ranking; automatic tests on every push.
+5. **Next milestone:**
+   - **Branches:** one place, many branches, linked as one. Each branch keeps its own district and Google Maps link, so the website can show every branch's link to click. (This changes the shape of `places.json` and `final_dataset.json`, so the website team must agree first.)
+   - View and like counts for ranking.
+   - Automatic tests on every push.

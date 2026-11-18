@@ -371,6 +371,6 @@ Empty templates (in `templates/`): `tvna_clip_template.json`, `tvna_clip_place_t
 - **Final dataset extras:** `url` and `posted_at` in `mentions`, and `sub_category`, are not included.
 - **Score after review:** `completeness` is not recalculated after the team fills fields.
 - **Outside Phnom Penh:** places in other provinces (e.g. Siem Reap in `clips/02.json`) are not rejected automatically. The team decides.
-- **Branches:** a place has one `google_maps_url`, even with several branches.
+- **Branches:** a place has one `google_maps_url`, even with several branches (5c keeps the first link; other branches' links stay only in their clips). **Next milestone:** one place, many branches, each with its own district and Maps link, all shown on the website. Needs the website team's OK (changes places.json and final_dataset.json).
 - **STT script:** `audio-text/test/test_gemini.py` still writes the old format (`source.timestamp`, file `<name>_gemini.json`), not the clip template.
 - **Older docs:** the Google Doc and the older diagrams (`tvna_json_files_diagram.png`, `tvna_pipeline_overview.png`) may not match this guide.
