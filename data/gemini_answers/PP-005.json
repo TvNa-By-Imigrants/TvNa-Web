@@ -1,0 +1,74 @@
+{
+  "clip_id": "PP-005",
+  "extraction": {
+    "method": "llm",
+    "model": "gemini-3.6-flash",
+    "prompt_version": "v5"
+  },
+  "fields": [
+    {
+      "place_id": null,
+      "place_name": "Beans Barley",
+      "place_name_alt": [
+        "Beans Bali"
+      ],
+      "category": "cafe",
+      "sub_category": null,
+      "price_range": null,
+      "area": null,
+      "area_description": "located on street 216 near National Olympic Stadium",
+      "google_maps_url": null,
+      "opening_hours": null,
+      "speaker_opinion": "The cafe serves delicious coffee, soda, and pastries like apple crumble topped with unique coconut ice cream. It has an aesthetic space that is great for photos, working, or hanging out.",
+      "menu_items": [
+        "Yuzu Espresso",
+        "apple crumble",
+        "coconut ice cream",
+        "Affogato",
+        "Espresso Tonic"
+      ],
+      "completeness": 0.67,
+      "missing_fields": [
+        "area"
+      ],
+      "verification_status": "needs_review",
+      "cleaned_by": null,
+      "cleaner_note": null,
+      "notes": null,
+      "confidence": {
+        "place_name": "high",
+        "category": "high",
+        "price_range": null,
+        "area": null
+      },
+      "missing_reasons": {
+        "price_range": "not mentioned",
+        "area": "no district from the allowed list was mentioned",
+        "sub_category": "not mentioned",
+        "opening_hours": "not mentioned"
+      },
+      "evidence_text": "Beans Barley",
+      "segment_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "flags": [
+        "name_from_caption"
+      ]
+    }
+  ]
+}

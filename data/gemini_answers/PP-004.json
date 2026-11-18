@@ -1,0 +1,61 @@
+{
+  "clip_id": "PP-004",
+  "extraction": {
+    "method": "llm",
+    "model": "gemini-3.6-flash",
+    "prompt_version": "v5"
+  },
+  "fields": [
+    {
+      "place_id": null,
+      "place_name": "Wat Botum Park",
+      "place_name_alt": [
+        "សួនវត្តបទុម"
+      ],
+      "category": "park",
+      "sub_category": null,
+      "price_range": null,
+      "area": null,
+      "area_description": null,
+      "google_maps_url": null,
+      "opening_hours": null,
+      "speaker_opinion": "This location hosts the Francophonie event featuring realistic temple sculptures, bringing different cultures together, offering new experiences, and celebrating diversity.",
+      "menu_items": null,
+      "completeness": 0.67,
+      "missing_fields": [
+        "area"
+      ],
+      "verification_status": "needs_review",
+      "cleaned_by": null,
+      "cleaner_note": null,
+      "notes": null,
+      "confidence": {
+        "place_name": "high",
+        "category": "high",
+        "price_range": null,
+        "area": null
+      },
+      "missing_reasons": {
+        "price_range": "not mentioned",
+        "area": "district not mentioned in transcript or caption",
+        "sub_category": "not mentioned",
+        "opening_hours": "not mentioned",
+        "area_description": "not mentioned",
+        "menu_items": "not mentioned"
+      },
+      "evidence_text": "នៅសួនវត្តបទុម!",
+      "segment_ids": [
+        0,
+        1,
+        3,
+        4,
+        5,
+        6,
+        13
+      ],
+      "flags": [
+        "name_from_caption"
+      ]
+    }
+  ]
+}

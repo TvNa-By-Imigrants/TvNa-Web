@@ -1,0 +1,80 @@
+{
+  "clip_id": "PP-007",
+  "audio_file": "PP-007.wav",
+  "source": {
+    "url": "https://www.tiktok.com/@pengpos/video/7694625553294413076",
+    "video_id": "7694625553294413076",
+    "platform": "tiktok",
+    "creator": "@pengpos",
+    "caption": "ហាងគេ good vibe ហាណា 🥵 @Beans Barley #cafehopping #craftbeer #pengposប៉េងប៉ោះ",
+    "posted_at": "2026-10-09",
+    "collected_at": "2026-11-18"
+  },
+  "stt": {
+    "tool": "gemini",
+    "model": "gemini-3.8-flash",
+    "settings": "km+en code-switching prompt v1",
+    "transcript": "ហាងកាហ្វេទើបបើកថ្មីទៀតហើយអ្នកទាំងអស់គ្នា\nប៉ុន្តែនៅនេះហ្អា more than just a coffee shop\nនៅនេះផងដែរពេលថ្ងៃគេបើកជាលក្ខណៈកាហ្វេ\nពេលយប់គេបើករបៀបជាលក្ខណៈកន្លែងញ៉ាំអីត្រជាក់ៗចឹងហ្អា\nហើយបើ vibe របស់គេវិញហ្អាអ្នកទាំងអស់គ្នា ខ្ញុំមករាងរសៀលហ៎\nនិយាយទៅហ្អាគឺថា cozy ទំនងហ្មងហ្អា\nចូលមកចង់តែអង្គុយនៅហ្នឹងហ្មង\nហើយគេមានតាំងពី outdoor និង indoor\nចឹងហ្អាបើសិនជាអ្នកទាំងអស់គ្នាអត់ដឹងទៅណាទេហ្អា អាចមកនេះបាន\nហើយទីតាំងរបស់គាត់ហ្នឹងហ្អា នៅម្ដុំអូឡាំពិក\nហើយហាងគាត់មានឈ្មោះថា Beans and Barley"
+  },
+  "ground_truth": null,
+  "extraction": {
+    "method": "llm",
+    "model": "gemini-3.6-flash",
+    "prompt_version": "v5"
+  },
+  "fields": [
+    {
+      "place_id": "tvna_p_0001",
+      "place_name": "Beans Barley",
+      "place_name_alt": [
+        "Beans and Barley"
+      ],
+      "category": "cafe",
+      "sub_category": null,
+      "price_range": null,
+      "area": "Prampi Makara",
+      "area_description": "ម្ដុំអូឡាំពិក",
+      "google_maps_url": "https://maps.app.goo.gl/83k2NQZKFZm3d2Dj8",
+      "opening_hours": null,
+      "speaker_opinion": "ហាងមានបរិយាកាស cozy នឹង good vibe គួរឲ្យចង់អង្គុយ ដោយមានកន្លែងអង្គុយទាំង indoor និង outdoor។ ពេលថ្ងៃលក់ជាកាហ្វេ ហើយពេលយប់ជាកន្លែងញ៉ាំអីត្រជាក់ៗ។",
+      "menu_items": null,
+      "completeness": 0.67,
+      "missing_fields": [
+        "area"
+      ],
+      "verification_status": "verified",
+      "cleaned_by": "panha",
+      "cleaner_note": null,
+      "notes": null,
+      "confidence": {
+        "place_name": "high",
+        "category": "high",
+        "price_range": null,
+        "area": null
+      },
+      "missing_reasons": {
+        "price_range": "not mentioned",
+        "area": "only neighborhood (Olympic area) mentioned, no district named",
+        "sub_category": "not mentioned",
+        "opening_hours": "exact opening hours not mentioned",
+        "menu_items": "no specific menu items mentioned"
+      },
+      "evidence_text": "ហើយហាងគាត់មានឈ្មោះថា Beans and Barley",
+      "segment_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "flags": []
+    }
+  ],
+  "notes": null
+}

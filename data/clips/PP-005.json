@@ -1,0 +1,87 @@
+{
+  "clip_id": "PP-005",
+  "audio_file": "PP-005.wav",
+  "source": {
+    "url": "https://www.tiktok.com/@motokhiev.bydm/video/7708727105760070932",
+    "video_id": "7708727105760070932",
+    "platform": "tiktok",
+    "creator": "@motokhiev.bydm",
+    "caption": "This cafe place deserves more hype 🩵☕️ 🛵Beans Barley  #cafe #olympic",
+    "posted_at": "2026-11-16",
+    "collected_at": "2026-11-18"
+  },
+  "stt": {
+    "tool": "gemini",
+    "model": "gemini-3.8-flash",
+    "settings": "km+en code-switching prompt v1",
+    "transcript": "ហាងកាហ្វេលាក់ខ្លួន?\nបើកថ្មីនៅម្ដុំអូឡាំពិចចាស!\nយើ!\nហាងកាហ្វេគាត់នេះដូចមិនលាក់ខ្លួនប៉ុន្មានទេ តែម្នាក់ៗទៅហូរមកៗ\nហាងគាត់នេះមេឃភ្លៀងកាហ្វេ ថ្ងៃក្ដៅឡើងសូដា\nSo the cafe we are in right now called Beans Bali, located on street 216 near National Olympic Stadium.\nNow, time to try their drink.\nI got Yuzu Espresso.\nThe espresso give you the bold coffee kick while the yuzu add a refreshing twist.\nកាហ្វេក៏ឆ្ងាញ់ សូដាក៏ឆ្ងាញ់ មកនំនេះឆ្ងាញ់ទៀត!\nThis is apple crumble, but instead of using the usual vanilla ice cream, they use coconut ice cream which was so delicious.\nនិយាយទៅ we are so in love with this place was because they use coconut ice cream for everything, even the Affogato.\nBut this isn't just a replacement, it's actually an upgrade that made the taste even better and more unique.\nIf you are planning to go there, I highly recommend you guys to try Espresso Tonic.\nThe bubble from the tonic bring out the espresso [unclear] bring out the espresso aroma, sending rich coffee scent straight to the nose.\nWell, if you are still searching for a good coffee to sit for work, assignment or just casual hang out, that also come out with aesthetic space for beautiful photo, you must really give Beans Bali a try, just few minute walk from National Olympic Stadium.\nSo, what are you doing right now?\nYou are now watching ម៉ូតូឌុប!\nLive life like local, see you later, bye!\nBye!"
+  },
+  "ground_truth": null,
+  "extraction": {
+    "method": "llm",
+    "model": "gemini-3.6-flash",
+    "prompt_version": "v5"
+  },
+  "fields": [
+    {
+      "place_id": "tvna_p_0001",
+      "place_name": "Beans Barley",
+      "place_name_alt": [
+        "Beans Bali"
+      ],
+      "category": "cafe",
+      "sub_category": null,
+      "price_range": null,
+      "area": "Prampi Makara",
+      "area_description": "located on street 216 near National Olympic Stadium",
+      "google_maps_url": "https://maps.app.goo.gl/83k2NQZKFZm3d2Dj8",
+      "opening_hours": null,
+      "speaker_opinion": "The cafe serves delicious coffee, soda, and pastries like apple crumble topped with unique coconut ice cream. It has an aesthetic space that is great for photos, working, or hanging out.",
+      "menu_items": [
+        "Yuzu Espresso",
+        "apple crumble",
+        "coconut ice cream",
+        "Affogato",
+        "Espresso Tonic"
+      ],
+      "completeness": 0.67,
+      "missing_fields": [
+        "area"
+      ],
+      "verification_status": "verified",
+      "cleaned_by": "panha",
+      "cleaner_note": "district is found based on area_description",
+      "notes": null,
+      "confidence": {
+        "place_name": "high",
+        "category": "high",
+        "price_range": null,
+        "area": null
+      },
+      "missing_reasons": {},
+      "evidence_text": "Beans Barley",
+      "segment_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "flags": [
+        "name_from_caption"
+      ]
+    }
+  ],
+  "notes": null
+}

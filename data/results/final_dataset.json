@@ -1,0 +1,37 @@
+[
+  {
+    "place_id": "tvna_p_0001",
+    "place_name": "Beans Barley",
+    "category": [
+      "cafe"
+    ],
+    "price_range": [],
+    "area": "Prampi Makara",
+    "area_description": [
+      "located on street 216 near National Olympic Stadium",
+      "ម្ដុំអូឡាំពិក"
+    ],
+    "google_maps_url": "https://maps.app.goo.gl/83k2NQZKFZm3d2Dj8",
+    "opening_hours": [],
+    "menu_items": [
+      "Yuzu Espresso",
+      "apple crumble",
+      "coconut ice cream",
+      "Affogato",
+      "Espresso Tonic"
+    ],
+    "popularity": 2,
+    "mentions": [
+      {
+        "clip_id": "PP-005",
+        "creator": "@motokhiev.bydm",
+        "speaker_opinion": "The cafe serves delicious coffee, soda, and pastries like apple crumble topped with unique coconut ice cream. It has an aesthetic space that is great for photos, working, or hanging out."
+      },
+      {
+        "clip_id": "PP-007",
+        "creator": "@pengpos",
+        "speaker_opinion": "ហាងមានបរិយាកាស cozy នឹង good vibe គួរឲ្យចង់អង្គុយ ដោយមានកន្លែងអង្គុយទាំង indoor និង outdoor។ ពេលថ្ងៃលក់ជាកាហ្វេ ហើយពេលយប់ជាកន្លែងញ៉ាំអីត្រជាក់ៗ។"
+      } 
+    ]
+  }
+]
