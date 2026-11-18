@@ -118,17 +118,19 @@ def pid(p, i=0):
 def entry(place_id):
     return next(e for e in load(PLACES) if e["place_id"] == place_id)
 
-a = clip("PP-002", dict(place_name="Hanjang Coffee & Eatery", area=["Chamkar Mon"]))
+a = clip("PP-002", dict(place_name="Hanjang Coffee & Eatery", area="Chamkar Mon"))
 b = clip("PP-003", dict(place_name="ALWAYS selfie booth"))
 out = run(a, b)
 check("1 empty places.json: 2 new places, Next stage 6", pid(a) == "tvna_p_0001" and pid(b) == "tvna_p_0002"
       and "new (2):" in out and "Next: python stage6_build_final_dataset.py data/clips/*.json" in out, out)
 
-c = clip("PP-010", dict(place_name="Han-Jan Coffee & Eatery", area=["Daun Penh"]))
+c = clip("PP-010", dict(place_name="Han-Jan Coffee & Eatery", area="Daun Penh"))
 out = run(c)
-check("2 fuzzy 97%: matched, new spelling saved as alias, new district added", pid(c) == "tvna_p_0001"
+check("2 fuzzy 97%: matched, new spelling saved as alias; a different district is reported, the first kept",
+      pid(c) == "tvna_p_0001"
       and 'fuzzy 97% like "Hanjang Coffee & Eatery"' in out and "Han-Jan Coffee & Eatery" in entry("tvna_p_0001")["aliases"]
-      and entry("tvna_p_0001")["area"] == ["Chamkar Mon", "Daun Penh"], out)
+      and entry("tvna_p_0001")["area"] == "Chamkar Mon"
+      and 'another district "Daun Penh", places.json keeps "Chamkar Mon" (branches: Capstone 2)' in out, out)
 
 c2 = clip("PP-011", dict(place_name="han-jan coffee and eatery"))
 out = run(c2)
@@ -340,9 +342,9 @@ check("V2 each waiting place listed with its status, and the team told what to d
       and 'writes "verification_status": "verified". Then run this again.' in out, out)
 
 known = entry("tvna_p_0001")
-team_id = clip("PP-410", dict(place_name="Hanjan Cafe Unchecked", place_id="tvna_p_0001", area=["Sen Sok"],
+team_id = clip("PP-410", dict(place_name="Hanjan Cafe Unchecked", place_id="tvna_p_0001", area="Sen Sok",
                               verification_status="needs_review"))
-team_rej = clip("PP-411", dict(place_name="Hanjan Cafe Rejected", place_id="tvna_p_0001", area=["Dangkao"],
+team_rej = clip("PP-411", dict(place_name="Hanjan Cafe Rejected", place_id="tvna_p_0001", area="Dangkao",
                                verification_status="rejected"))
 places_raw = PLACES.read_bytes()
 out = run(team_id, team_rej)
@@ -397,10 +399,38 @@ check("W4 same name in other capitals: no note", pid(same) == "tvna_p_0950" and 
 t1 = clip("PP-430", dict(place_name="Text Area Tea House", area="Sen Sok"))
 out = run(t1)
 new_id = pid(t1)
-check("T1 area as text: new place gets it as a list in places.json", bool(new_id) and entry(new_id)["area"] == ["Sen Sok"], out)
+check("T1 new place: its district saved as text in places.json", bool(new_id) and entry(new_id)["area"] == "Sen Sok", out)
 t2 = clip("PP-431", dict(place_name="Text Area Tea House", area="Daun Penh"))
 out = run(t2)
-check("T2 area as text on a match: district added", pid(t2) == new_id and entry(new_id)["area"] == ["Sen Sok", "Daun Penh"], out)
+check("T2 match with another district: first kept, reported", pid(t2) == new_id and entry(new_id)["area"] == "Sen Sok"
+      and 'another district "Daun Penh", places.json keeps "Sen Sok"' in out, out)
+t3 = clip("PP-432", dict(place_name="No District Yet Cafe"))
+run(t3)
+t3_id = pid(t3)
+t4 = clip("PP-433", dict(place_name="No District Yet Cafe", area="Dangkao"))
+out = run(t4)
+check("T3 place with no district: the next clip's district fills it", entry(t3_id)["area"] == "Dangkao"
+      and "district added: Dangkao" in out, out)
+data = load(PLACES)
+next(e for e in data if e["place_id"] == t3_id)["area"] = ["Dangkao", "Sen Sok"]
+PLACES.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+t5 = clip("PP-434", dict(place_name="No District Yet Cafe", area="Dangkao"))
+out = run(t5)
+check("T4 old places.json with a list: read, saved back as one district (the first)",
+      entry(t3_id)["area"] == "Dangkao" and "another district" not in out, out)
+check("T5 old list with two districts: the one left out is named", "district saved as text (left out: Sen Sok)" in out, out)
+
+data = load(PLACES)
+next(e for e in data if e["place_id"] == t3_id)["area"] = "BKK1"
+PLACES.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+t6 = clip("PP-435", dict(place_name="No District Yet Cafe", place_name_alt=["No District Yet Cafe BKK1"]))
+out = run(t6)
+check("T6 hand-typed area that is not a district, clip with no district: kept, not erased",
+      pid(t6) == t3_id and entry(t3_id)["area"] == "BKK1", out)
+t7 = clip("PP-436", dict(place_name="No District Yet Cafe", area="Chamkar Mon"))
+out = run(t7)
+check("T7 hand-typed area that is not a district, clip with a district: replaced, and the report says so",
+      entry(t3_id)["area"] == "Chamkar Mon" and 'district added: Chamkar Mon (was "BKK1", not a district)' in out, out)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

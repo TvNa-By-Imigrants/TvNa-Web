@@ -10,6 +10,8 @@ so a name Gemini got wrong can't become a place's name on the website. Each appr
 5. anything else -> new entry in places.json with a new place_id
 For an unclear place, the team writes the suggested place_id in the clip (same place) or "new" (a different
 place), then runs this again. Every name that gets a place_id is saved as an alias, so it matches exactly next time.
+Each place keeps one district (area, text). A clip that names another district is reported; the first one stays
+(one district per branch: Capstone 2).
 
 Usage:
     python stage5c_match_places.py data/clips/*.json
@@ -94,11 +96,35 @@ def add_aliases(entry, names):
     return added
 
 
-def add_areas(entry, values, areas):
-    entry["area"] = as_list(entry.get("area"))
-    added = [d for d in match_districts(values, areas)[0] if d not in entry["area"]]
-    entry["area"].extend(added)
-    return added
+def first_district(value, areas) -> Optional[str]:
+    """One district from text or an old list; None when there is none."""
+    found = match_districts(value, areas)[0]
+    return found[0] if found else None
+
+
+def set_area(entry, value, areas) -> List[str]:
+    """places.json keeps one district (text): its own, else this clip's. Anything replaced or left out is said."""
+    old = entry.get("area")
+    kept, district = first_district(old, areas), first_district(value, areas)
+    if kept:
+        entry["area"] = kept
+        if not isinstance(old, list):
+            return []
+        dropped = [d for d in match_districts(old, areas)[0] if d != kept]
+        return ["district saved as text" + (f" (left out: {', '.join(dropped)})" if dropped else "")]
+    if district:
+        entry["area"] = district
+        was = f" (was {json.dumps(old, ensure_ascii=False)}, not a district)" if old else ""
+        return [f"district added: {district}{was}"]
+    return []
+
+
+def other_district(entry, value, areas) -> List[str]:
+    """Said once, when the place is matched: this clip names a district that places.json doesn't keep."""
+    district = first_district(value, areas)
+    if district and entry.get("area") and district != entry["area"]:
+        return [f'another district "{district}", places.json keeps "{entry["area"]}" (branches: Capstone 2)']
+    return []
 
 
 def remember(entry: dict, place: dict, names: List[str], areas) -> List[str]:
@@ -107,9 +133,7 @@ def remember(entry: dict, place: dict, names: List[str], areas) -> List[str]:
     new_aliases = add_aliases(entry, names)
     if new_aliases:
         notes.append(f"new aliases: {', '.join(new_aliases)}")
-    new_areas = add_areas(entry, place.get("area"), areas)
-    if new_areas:
-        notes.append(f"new areas: {', '.join(new_areas)}")
+    notes += set_area(entry, place.get("area"), areas)
     if place.get("google_maps_url") and not entry.get("google_maps_url"):
         entry["google_maps_url"] = place["google_maps_url"]
         notes.append("Maps link added")
@@ -230,7 +254,7 @@ def main():
                     continue
                 notes = remember(by_id[set_by_team], f, names, areas)
                 if notes:
-                    notes += website_name(by_id[set_by_team], f)
+                    notes += other_district(by_id[set_by_team], f.get("area"), areas) + website_name(by_id[set_by_team], f)
                     index(by_id[set_by_team])
                     report["matched"].append(f"{label} -> {set_by_team} (set by the team; {'; '.join(notes)})")
                     places_changed = True
@@ -250,14 +274,14 @@ def main():
                 continue
             if group == "new":
                 place_id = next_place_id(places)
-                entry = {"place_id": place_id, "place_name": f["place_name"], "aliases": [], "area": [],
+                entry = {"place_id": place_id, "place_name": f["place_name"], "aliases": [], "area": None,
                          "google_maps_url": f.get("google_maps_url") or None}
                 places.append(entry)
                 by_id[place_id] = entry
             notes = ([why] if why else []) + remember(by_id[place_id], f, names, areas)
             if group == "new":
                 notes = [n for n in notes if not n.startswith("new aliases")]
-            notes += website_name(by_id[place_id], f)
+            notes += other_district(by_id[place_id], f.get("area"), areas) + website_name(by_id[place_id], f)
             report[group].append(f"{label} -> {place_id}" + (f" ({'; '.join(notes)})" if notes else ""))
             index(by_id[place_id])
             f["place_id"] = place_id

@@ -7,6 +7,7 @@ place_name_alt, so no name is lost. A [no speech] clip with a caption is read fr
 Stage 2 must have read the caption first (a saved null = the video has no caption).
 A copy of the places as stage 4 made them (Gemini's answer after the code's checks) goes to
 data/gemini_answers/<clip_id>.json. Nobody edits it, so after the team review we can see what Gemini got wrong.
+area is one district as text: the first one Gemini names; any other district goes in area_description.
 place_id stays null here; stage5c_match_places.py sets it.
 Needs GEMINI_API_KEY in .env (see README.md).
 
@@ -55,9 +56,9 @@ PROMPT_VERSION = "v5"
 PART_SIZE = 60
 PART_STEP = 50
 # When the same place shows up again in a later part:
-FILL_IF_EMPTY = ["category", "sub_category", "price_range", "area_description", "opening_hours",
+FILL_IF_EMPTY = ["category", "sub_category", "price_range", "area", "area_description", "opening_hours",
                  "speaker_opinion", "notes"]
-COMBINE = ["place_name_alt", "menu_items", "area"]
+COMBINE = ["place_name_alt", "menu_items"]
 # A "name" that is only @accounts or #hashtags: the prompt forbids it; the code catches slips.
 TAG_ONLY = re.compile(r"(?:[@#]\S+\s*)+")
 
@@ -236,6 +237,10 @@ def build_record(p, window, caption=None):
     if not_districts:
         flags.append("area_not_in_areas_list")
         area_description = area_description or ", ".join(not_districts)
+    if len(area) > 1:
+        # One district per place for now (branches: Capstone 2); the others stay readable here.
+        others = ", ".join(area[1:])
+        area_description = f"{area_description}; also: {others}" if area_description else f"also: {others}"
 
     name = name_key(p.get("place_name"))
     if not name:
@@ -265,7 +270,7 @@ def build_record(p, window, caption=None):
         "category": p.get("category"),
         "sub_category": p.get("sub_category"),
         "price_range": p.get("price_range"),
-        "area": area or None,
+        "area": area[0] if area else None,
         "area_description": area_description,
         "google_maps_url": None,
         "opening_hours": p.get("opening_hours"),
@@ -307,15 +312,18 @@ def merge_record(first: dict, later: dict) -> None:
     Empty details are filled, lists are combined, filled details are kept. Then the score is redone."""
     for key in COMBINE:
         combined = list(dict.fromkeys((first.get(key) or []) + (later.get(key) or [])))
-        if key == "area" and not first.get("area") and combined:
-            first["confidence"]["area"] = later["confidence"].get("area")
         first[key] = combined if combined or key == "place_name_alt" else None
     first["place_name_alt"] = clean_names(first["place_name_alt"], first.get("place_name"))
     for key in FILL_IF_EMPTY:
         if not first.get(key) and later.get(key):
             first[key] = later[key]
-            if key in ("category", "price_range"):
+            if key in ("category", "price_range", "area"):
                 first["confidence"][key] = later["confidence"].get(key)
+    # One district per place: another part's district stays readable, as in build_record.
+    other = later.get("area")
+    if first.get("area") and other and other != first["area"] and other not in (first.get("area_description") or ""):
+        desc = first.get("area_description")
+        first["area_description"] = f"{desc}; also: {other}" if desc else f"also: {other}"
     first["segment_ids"] = sorted(set(first["segment_ids"]) | set(later["segment_ids"]))
     first["missing_reasons"] = {k: v for k, v in first["missing_reasons"].items() if not first.get(k)}
 

@@ -255,14 +255,14 @@ check("V5 no creator warning for a clip with nothing published; a rejected place
 for f in CLIPS.glob("*.json"):
     f.unlink()
 write(PLACES, [drop_missing(e) for e in [
-    {"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "area": ["Chamkar Mon"]},
+    {"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "area": "Chamkar Mon"},
     {"place_id": "tvna_p_0002", "place_name": "Brown Coffee", "area": []},
     {"place_id": "tvna_p_0003", "place_name": "Luv selfie booth", "area": None},
     {"place_id": "tvna_p_0004", "place_name": "Beans Barley", "area": MISSING}]])
-clip("PP-701", [place(place_id="tvna_p_0001", area=["Daun Penh"]),
-                place(place_id="tvna_p_0002", place_name="Brown Coffee", area=["Sen Sok"]),
+clip("PP-701", [place(place_id="tvna_p_0001", area="Daun Penh"),
+                place(place_id="tvna_p_0002", place_name="Brown Coffee", area="Sen Sok"),
                 place(place_id="tvna_p_0003", place_name="Luv selfie booth", area="Daun Penh"),
-                place(place_id="tvna_p_0004", place_name="Beans Barley", area=["BKK1"])])
+                place(place_id="tvna_p_0004", place_name="Beans Barley", area="BKK1")])
 clip("PP-702", [place(place_id="tvna_p_0002", place_name="Brown Coffee", area=["Daun Penh", "sen sok"])])
 code, out = run()
 rec = {r["place_id"]: r for r in load(OUT)} if OUT.exists() else {}

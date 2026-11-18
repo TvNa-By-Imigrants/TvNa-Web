@@ -12,9 +12,17 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 **Other options:** build the hints now (rejected: too few reviewed clips to know if it helps).
 
-## 2026-11-18: The website file has one district per place
+## 2026-11-18: One district per place, as text, in every file
 
-**Decision:** in `final_dataset.json`, `area` is one district as text (e.g. `"Chamkar Mon"`), or `null`, not a list. It is the first district in `places.json`, or else the first one from the clips. When a place has more than one, stage 6 warns and says which one the website shows. `places.json` still keeps `area` as a list, so no district is lost. In clip files the team may write one district as text or a list; the 5b checker accepts both, and 5c and 6 read both.
+**Decision:** `area` is one district as text (e.g. `"Chamkar Mon"`), or `null`, never a list, in clip files, `places.json` and `final_dataset.json`.
+
+- Stage 4: if Gemini names more than one district, the first goes in `area` and the others in `area_description` ("also: …"), so nothing is lost. The same happens when a long video's later part names another district. The Gemini prompt is unchanged (still v5).
+- 5b: a list is a problem ("write one district as text").
+- 5c: a new place takes the clip's district; an empty one is filled later; a different one is only reported (`another district "…", places.json keeps "…"`). An old `places.json` with a list is read and saved back as text, and the report names any district left out. A hand-typed `area` that is not a district (e.g. "BKK1") is kept until a clip brings a real district; the report then says what it replaced.
+- Stage 6: the district in `places.json`, else the first one from the clips; other districts give a warning.
+- `data/gemini_answers/` keeps its old shape (never edited).
+
+(Earlier the same day only `final_dataset.json` had changed, and clips accepted both shapes. The user asked for text everywhere.)
 
 **Why:** for now the website shows one district per place. Branches (one place, many branches, each with its own district and Maps link) are planned for Capstone 2.
 

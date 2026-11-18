@@ -192,7 +192,7 @@ What the person does, case by case:
 
 | Case | Example after stage 4 | What the person does |
 |---|---|---|
-| **A.** A district is named | `area: ["Chamkar Mon"]` | confirm it on Google Maps; add the Maps link |
+| **A.** A district is named | `area: "Chamkar Mon"` | confirm it on Google Maps; add the Maps link |
 | **B.** Only a street, landmark or neighborhood | `area: null`, `area_description: "located on street 216 near National Olympic Stadium"` | search Google Maps with the name and the description; check it is the right place (name, photos); take the district from the Maps address; add the Maps link |
 | **C.** Nothing about the location | `area: null`, `area_description: null` | search Google Maps by name, plus clues from the video (signs, caption, the creator's other posts); then as in B |
 | **D.** Not found on Google Maps | still `null` | leave both `null`, write what was tried in `cleaner_note`, and **keep `needs_review`** (held back, not published; anyone can try again later) |
@@ -224,7 +224,7 @@ Example: "Hanjan Coffee" (from the caption) and "Hanjang Coffee & Eatery" (as he
 
 **Branches (today).** A shop with several branches is **one place** with one `place_id`.
 - When a video shows a known name but a **different** Maps link, 5c doesn't guess. It marks it "unclear: another branch, or a different place?". A person writes the existing `place_id` (a branch) or `"new"` (a different shop).
-- Each branch's district is added to the place's `area` list in `places.json`. The website file shows only one district: the first one.
+- A place keeps **one** district (`area` is text in every file). When another branch's video names a different district, 5c reports it and keeps the first one.
 - **Limit:** a place keeps only **one** Maps link (the first one), and the website file shows only **one** district (the first one). Another branch's link stays only in its own clip file, so the website shows one link and one district. Planned for Capstone 2 (section 9).
 
 #### 5a and 5c: same video, or same place?
@@ -267,7 +267,7 @@ Both stages compare clips, but they ask different questions:
 - **Output:** `data/results/final_dataset.json`, the file the website uses.
 - **Continues only if:** the place is `verified` and has a `place_id`.
 - **If not:** the place is left out, and a warning says why. Warnings also show where clips disagree (e.g. two different price ranges).
-- **One district:** `area` is the first district in `places.json`, or else the first one from the clips. If a place has more than one (e.g. branches), a warning says which one the website shows. One district per branch is planned for Capstone 2.
+- **One district:** `area` is the district in `places.json`, or else the first one from the clips. If clips name other districts (e.g. branches), a warning says which one the website shows. One district per branch is planned for Capstone 2.
 - **Why it matters:** the website shows one name and one district per place. Other spellings stay inside the pipeline, for matching only.
 
 ---

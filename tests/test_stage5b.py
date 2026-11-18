@@ -27,7 +27,7 @@ def load(p):
 def good_place(**changes):
     """A verified place with no problems; changes set fields (MISSING deletes the key)."""
     p = load(PIPE / "templates/tvna_clip_place_template.json")
-    p.update(place_name="Beans Barley", category="cafe", area=["Prampi Makara"], speaker_opinion="Good coffee.",
+    p.update(place_name="Beans Barley", category="cafe", area="Prampi Makara", speaker_opinion="Good coffee.",
              google_maps_url="https://maps.app.goo.gl/83k2NQZKFZm3d2Dj8", completeness=1.0, missing_fields=[],
              verification_status="verified", cleaned_by="panha", cleaner_note=None, notes=None)
     for key, value in changes.items():
@@ -82,7 +82,7 @@ for url in ["https://maps.app.goo.gl/abc", "https://www.google.com/maps/place/Be
             "https://google.com/maps?cid=123", "https://maps.google.com/?cid=1", "https://goo.gl/maps/xyz"]:
     code, out = one(good_place(google_maps_url=url))
     check(f"1 Maps link accepted: {url}", code == 0 and "ready (1)" in out, out)
-code, out = one(good_place(area=["ប្រាំពីរមករា"]))
+code, out = one(good_place(area="ប្រាំពីរមករា"))
 check("1 Khmer district name accepted", code == 0 and "ready (1)" in out, out)
 
 # 2. status: typo, null, "", missing, not text
@@ -106,27 +106,27 @@ code, out = one(good_place(notes="Opens late on weekends", speaker_opinion="Noth
 check("3 real text that starts with 'nothing' or mentions it: fine", code == 0, out)
 
 # 4. area
-code, out = one(good_place(area=["7 Makara"]))
+code, out = one(good_place(area="7 Makara"))
 check('4 area "7 Makara": not a district, suggests "Prampi Makara"',
       code == 1 and 'area "7 Makara" is not one of the 14 districts' in out and 'Did you mean "Prampi Makara"?' in out, out)
-code, out = one(good_place(area="Prampi Makara"))
-check('4 area as text (one district): fine, like a list', code == 0 and "ready (1)" in out, out)
-code, out = one(good_place(area="7 Makara"))
-check('4 area as text, not a district: problem + suggestion',
-      code == 1 and 'area "7 Makara" is not one of the 14 districts' in out and 'Did you mean "Prampi Makara"?' in out, out)
-for bad in (7, {"district": "Prampi Makara"}, ["Prampi Makara", 7]):
+code, out = one(good_place(area=["Prampi Makara"]))
+check('4 area as a list: problem, says write the district as text',
+      code == 1 and 'area must be one district as text, e.g. "Prampi Makara", not a list' in out, out)
+for bad in (7, {"district": "Prampi Makara"}, ["Prampi Makara", 7], []):
     code, out = one(good_place(area=bad))
-    check(f"4 area {bad!r}: not text or a list of text, problem",
-          code == 1 and "area must be a district as text" in out, out)
+    check(f"4 area {bad!r}: not one district as text, problem",
+          code == 1 and "area must be one district as text" in out, out)
 code, out = one(good_place(area=""))
 check('4 area "": write null', code == 1 and 'area: write null, not ""' in out, out)
-code, out = one(good_place(area=["Prampi Makara", None]))
-check("4 area list with a null item: not called a type problem", "area must be a district as text" not in out, out)
-code, out = one(good_place(area=["Boeung Keng Kang"]))
+code, out = one(good_place(area="Boeung Keng Kang"))
 check("4 area misspelled district: problem + suggestion",
       code == 1 and 'Did you mean "Boeng Keng Kang"?' in out, out)
+code, out = one(good_place(area=["7 Makara"]))
+check('4 area ["7 Makara"]: the example is a real district, not "7 Makara"',
+      code == 1 and 'e.g. "Prampi Makara", not a list' in out and 'e.g. "7 Makara"' not in out, out)
 code, out = one(good_place(area=["Prampi Makara", "Daun Penh"]))
-check("4 two districts (branches): fine", code == 0, out)
+check("4 two districts (branches): problem, one district for now (Capstone 2)",
+      code == 1 and 'e.g. "Prampi Makara", not a list (one district per place; branches: Capstone 2)' in out, out)
 
 # 5. category, Maps link, missing_fields
 code, out = one(good_place(category="Cafe"))

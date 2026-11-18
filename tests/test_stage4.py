@@ -112,7 +112,7 @@ check("1 normal: extraction records the real model",
       c["extraction"] == {"method": "llm", "model": "gemini-3.6-flash", "prompt_version": "v5"}, c["extraction"])
 f = c["fields"][0] if c["fields"] else {}
 check("1 normal: place saved with checks (area, completeness, status)",
-      len(c["fields"]) == 1 and f["place_name"] == "Tea Kingdom" and f["area"] == ["Chamkar Mon"]
+      len(c["fields"]) == 1 and f["place_name"] == "Tea Kingdom" and f["area"] == "Chamkar Mon"
       and f["completeness"] == 1.0 and f["verification_status"] == "auto_added" and f["place_id"] is None
       and f["flags"] == [], f)
 check("1 normal: key order kept (extraction right before fields), stt untouched",
@@ -179,7 +179,7 @@ check("5c 80 sentences: 2 parts (0-59, 50-79), one place", code == 0 and len(FAK
       and "[60] Sentence" not in FAKE.models.calls[0][1]
       and "[50] Sentence" in FAKE.models.calls[1][1] and "[79] Sentence" in FAKE.models.calls[1][1] and len(f) == 1, out)
 check("5c merge: empty details filled from part 2 (district, location, price)",
-      m.get("area") == ["Chamkar Mon"] and m.get("area_description") == "Toul Tompoung" and m.get("price_range") == "$2"
+      m.get("area") == "Chamkar Mon" and m.get("area_description") == "Toul Tompoung" and m.get("price_range") == "$2"
       and m["confidence"]["area"] == "medium" and m["confidence"]["price_range"] == "high", m)
 check("5c merge: lists combined without repeats, filled details kept",
       m.get("menu_items") == ["milk tea", "bubble waffle"] and m.get("speaker_opinion") == "Very good milk tea at a low price."
@@ -544,6 +544,25 @@ reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[])),
 run(q)
 check("D7 parts merged when names differ only in capitals and punctuation", len(load(q)["fields"]) == 1,
       load(q)["fields"])
+
+# F. area is one district as text (branches: Capstone 2)
+f = one(place(area=["Chamkar Mon", "Daun Penh"], area_description="near Russian Market"))
+check("F1 two districts from Gemini: area = the first as text, the other kept in area_description",
+      f["area"] == "Chamkar Mon" and f["area_description"] == "near Russian Market; also: Daun Penh", f)
+f = one(place(area=["Daun Penh", "Sen Sok"], area_description=None))
+check("F2 two districts, no description: 'also: …'", f["area"] == "Daun Penh" and f["area_description"] == "also: Sen Sok", f)
+f = one(place(area=["BKK1"], area_description=None))
+check("F3 not a district: area null, moved to area_description, flagged",
+      f["area"] is None and f["area_description"] == "BKK1" and "area_not_in_areas_list" in f["flags"], f)
+q = with_caption("PP-620", CAPTION, transcript=LONG2)
+reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[], area=["Sen Sok"])),
+                                  answer(luv(place_name_alt=[], evidence_text="Luv selfie booth is really fun",
+                                             segment_ids=[65], area=["Daun Penh"]))]})
+run(q)
+f = (load(q)["fields"] or [{}])[0]
+check("F4 2 parts with different districts: the first part's district kept as text", f.get("area") == "Sen Sok", f)
+check("F5 2 parts with different districts: the other part's district kept in area_description",
+      "also: Daun Penh" in (f.get("area_description") or ""), f)
 
 # E. second review fixes
 f = one(luv(place_name="Brown Coffee & Bakery", place_name_alt=[], name_source="caption", area=["Tuol Kouk"],
