@@ -2,7 +2,8 @@
 """Stage 6: build the final dataset for the website, one record per place.
 Joins the clip files to places.json by place_id. Run after stage5c_match_places.py.
 Values that can differ between clips (category, price_range, opening_hours,
-area_description, menu_items) are kept as lists of unique values. An empty Maps link, opinion or
+area_description, menu_items) are kept as lists of unique values. area is one district: the
+first one in places.json, else the first one from the clips (one district per branch: Capstone 2). An empty Maps link, opinion or
 creator ("", or only spaces) is written as null. Only places the team approved ("verified") are published.
 Each place gets one name, place_name from places.json; other names
 (aliases, place_name_alt) stay in the pipeline for matching and are not published.
@@ -124,9 +125,13 @@ def main():
         if not rec["place_name"]:
             warnings.append(f"{rec['place_id']}: no place_name in places.json, so the website shows no name")
         rec["popularity"] = len({norm(m["creator"]) for m in rec["mentions"] if m["creator"]})
-        rec["area"], not_districts = match_districts(rec["area"], areas)
+        districts, not_districts = match_districts(rec["area"], areas)
         for value in not_districts:
             warnings.append(f"{rec['place_id']}: area {value!r} is not a district in areas.json, left out")
+        rec["area"] = districts[0] if districts else None
+        if len(districts) > 1:
+            warnings.append(f"{rec['place_id']}: more than one district {districts}, the website shows "
+                            f"{districts[0]!r} (one district per branch: Capstone 2)")
         for key in CHECK_FIELDS:
             if len(rec[key]) > 1:
                 warnings.append(f"{rec['place_id']}: clips disagree on {key}: {rec[key]}")

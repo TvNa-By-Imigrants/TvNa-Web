@@ -8,7 +8,7 @@ _For the project supervisor. Last updated: 2026-11-18._
 - **How:** AI (Google Gemini) listens to each video and finds the places. Code checks the AI's answer. **A person approves every place** before it goes on the website.
 - **Scope:** TikTok videos only. Places in Phnom Penh only.
 - **Storage:** JSON files in git. No database.
-- **Status:** all stages are built and tested. 4 real videos have been processed so far; the first one has been reviewed and approved.
+- **Status:** all stages are built and tested. 5 real videos have been processed so far; two of them (PP-005 and PP-007, the same café) have been reviewed and approved.
 
 ---
 
@@ -172,6 +172,7 @@ Every stage is described the same way: what it does, input, output, when it cont
   - `flags`: what to double-check, e.g. `name_from_caption` (the name is only in the caption);
   - `google_maps_url`: always empty after stage 4; the person finds it.
 - **Steps:** check the name (swap with an alternative name if that one is right), find the place on Google Maps, take the district from the address, fill what is missing, sign with their name in `cleaned_by`, and set the status.
+- **Same place, other names:** creators often call one place by different names (English or Khmer, other spellings). Gemini does not know the names already confirmed (planned for Capstone 2), so the person links them: they copy the Maps link of the **right** place (5c matches by link first, whatever the name), check whether the place is already in `places.json`, and add every other name from the video to `place_name_alt`. After 5c they decide the **unclear** matches.
 - **Check:** `stage5b_validate_clips.py` reads every clip and changes nothing. It lists each place as **to review** (with what is still missing), **ready** (verified, no mistakes) or **problem**. It catches the easy mistakes of editing by hand: a misspelled status ("verfied"), a district not spelled as in `areas.json` ("7 Makara" instead of "Prampi Makara"), "nothing" instead of null, a verified place with no district, Maps link or reviewer name, and a broken file.
 - **Output:** status `verified` (approved) or `rejected`.
 - **Continues only if:** the status is `verified` and the check shows no problems.
@@ -223,17 +224,51 @@ Example: "Hanjan Coffee" (from the caption) and "Hanjang Coffee & Eatery" (as he
 
 **Branches (today).** A shop with several branches is **one place** with one `place_id`.
 - When a video shows a known name but a **different** Maps link, 5c doesn't guess. It marks it "unclear: another branch, or a different place?". A person writes the existing `place_id` (a branch) or `"new"` (a different shop).
-- Each branch's district is added to the place's `area` list.
-- **Limit:** a place keeps only **one** Maps link (the first one). Another branch's link stays only in its own clip file, so the website shows one link. Planned for the next milestone (section 9).
+- Each branch's district is added to the place's `area` list in `places.json`. The website file shows only one district: the first one.
+- **Limit:** a place keeps only **one** Maps link (the first one), and the website file shows only **one** district (the first one). Another branch's link stays only in its own clip file, so the website shows one link and one district. Planned for Capstone 2 (section 9).
+
+#### 5a and 5c: same video, or same place?
+
+Both stages compare clips, but they ask different questions:
+
+- **5a:** "Are these two files the **same video**?"
+- **5c:** "Are these two videos about the **same place**?"
+
+| | **5a: duplicate check** | **5c: match places** |
+|---|---|---|
+| Compares | the TikTok video number (`source.video_id` / the link) | the Google Maps link, then the names (`place_name`, `place_name_alt`, `aliases`) |
+| Looks at | a whole clip file | each place inside a clip |
+| Match must be | exact (same number) | exact link or name, or names 95%+ alike; 75–94% → a person decides |
+| Status needed | none (it ignores the status) | only `verified` places |
+| Result | moves the copy to `data/clips/duplicates/` and adds `"duplicate_of"` | writes a `place_id` in the clip, and updates `places.json` (new place, or new aliases and districts) |
+| Person needed? | no | yes, for "unclear" matches |
+| Real example | `PP-006.json` was a hand-made copy of PP-005 (same video) → moved | PP-005 (@motokhiev.bydm) and PP-007 (@pengpos): two videos, same café (Beans Barley, same Maps link) → one `place_id` |
+
+**How they work together:**
+
+```
+1 Collect ── first duplicate check (before any Gemini cost)
+2, 3, 4
+5a ── moves copies out of data/clips/
+5b ── the team reviews only real clips
+5c ── reads data/clips/*.json → copies are no longer there
+6  ── one record per place_id
+```
+
+- 5a runs first. The commands for 5b, 5c and 6 read `data/clips/*.json`, which does **not** include the `duplicates/` folder, so 5c and 6 never see a copy.
+- 5c then joins different videos of the same place under one `place_id`.
+
+**Why the website needs both:** 5a makes sure one video counts **once** (otherwise its opinion could appear twice). 5c makes sure one place is **one** record (otherwise "Beans Barley" and "Beans and Barley" would be two places). Together, `popularity` is right: Beans Barley = 2 different creators, not one creator counted twice, and not split over two records.
 
 ### Stage 6: Final dataset
 
-- **What it does:** joins all clips by `place_id` into **one record per place**: one name, its categories, districts and menu items, every creator's opinion, and `popularity` (the number of **different creators** who posted about it).
+- **What it does:** joins all clips by `place_id` into **one record per place**: one name, **one district**, its categories and menu items, every creator's opinion, and `popularity` (the number of **different creators** who posted about it).
 - **Input:** the clip files, `places.json` and `areas.json`.
 - **Output:** `data/results/final_dataset.json`, the file the website uses.
 - **Continues only if:** the place is `verified` and has a `place_id`.
 - **If not:** the place is left out, and a warning says why. Warnings also show where clips disagree (e.g. two different price ranges).
-- **Why it matters:** the website shows one name per place. Other spellings stay inside the pipeline, for matching only.
+- **One district:** `area` is the first district in `places.json`, or else the first one from the clips. If a place has more than one (e.g. branches), a warning says which one the website shows. One district per branch is planned for Capstone 2.
+- **Why it matters:** the website shows one name and one district per place. Other spellings stay inside the pipeline, for matching only.
 
 ---
 
@@ -303,7 +338,7 @@ data/
 
 **Built and tested:** stages 1–6. Stage 5b is done by hand, with a written checklist in the README and a script that checks the review for mistakes.
 
-**Real data:** 4 videos (PP-002 to PP-005) have gone through stage 4. The team review has started: PP-005 is verified; PP-002, PP-003 and PP-004 are waiting.
+**Real data:** 5 videos (PP-002 to PP-005, and PP-007) have gone through stage 4. PP-006 was a hand-made copy of PP-005; 5a moved it to `duplicates/`. The team review has started: PP-005 and PP-007 are verified; PP-002, PP-003 and PP-004 are waiting.
 
 **Decision (2026-11-18):** a place the team cannot find on Google Maps is **held back**: it stays `needs_review` with a note. It is not published (the website filters by district, so a place with no district would be hard to find) and not rejected (it may be real, just hard to find).
 
@@ -313,13 +348,14 @@ data/
 - Two people collecting on different computers at the same time can get the same clip number. Team rule: `git pull` first, push soon after.
 - Gemini is often busy (errors 503 and 504). Stages 3 and 4 then wait or switch model, which can take minutes.
 - Fixing a wrong place match needs two manual edits (the clip file and `places.json`).
-- A place with several branches keeps only one Google Maps link.
+- A Khmer name and an English name for the same place are matched only through the Google Maps link, or by a person. The team must pick the right Maps place in 5b.
+- A place with several branches keeps only one Google Maps link and shows only one district.
 
 **Next, in order:**
 1. Stages 2–4 refuse a copied clip file before any AI call.
-2. Learn from the team's fixes: save them, give known names to Gemini as hints, and measure accuracy on reviewed clips.
-3. An automatic Phnom Penh check in stage 4.
-4. **Next milestone:**
+2. An automatic Phnom Penh check in stage 4.
+3. **Capstone 2 (the next milestone):**
+   - **Learn from the team's fixes:** save them, give known place names to Gemini as hints (so it spells a place the same way for every creator), and measure accuracy on reviewed clips. Until then, the team links different names in 5b.
    - **Branches:** one place, many branches, linked as one. Each branch keeps its own district and Google Maps link, so the website can show every branch's link to click. (This changes the shape of `places.json` and `final_dataset.json`, so the website team must agree first.)
    - View and like counts for ranking.
    - Automatic tests on every push.

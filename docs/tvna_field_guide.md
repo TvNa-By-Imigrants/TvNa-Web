@@ -2,7 +2,7 @@
 
 We use **4 kinds of JSON files**. This guide shows each one **in full**, with the **same example place** (Tea Kingdom), so you can see how they connect. Example values only, not real data.
 
-- The full process is in the Google Doc "TVNA Data Pipeline".
+- The full process, stage by stage: [tvna_pipeline_explained.md](tvna_pipeline_explained.md).
 - How the files connect: `docs/tvna_data_model.mmd`.
 - The scripts are in the repo root (`stage1_new_clip.py` … `stage6_build_final_dataset.py`); empty templates are in `templates/`.
 - Where the files are: clip files in `data/clips/`, `areas.json` in `data/reference/`, `places.json` and `final_dataset.json` in `data/results/`.
@@ -141,7 +141,7 @@ Made automatically in stage 6 from the 3 files above.
   "place_name": "Tea Kingdom",
   "category": ["cafe"],
   "price_range": [],
-  "area": ["Boeng Keng Kang"],
+  "area": "Boeng Keng Kang",
   "area_description": [],
   "google_maps_url": "https://maps.app.goo.gl/...",
   "opening_hours": [],
@@ -171,7 +171,8 @@ Stage 6 joins everything. For each `place_id` it finds all clips with that id:
 - Places with no `place_id` yet are counted in one warning line. Stage 5c lists them one by one.
 - `popularity` = number of **different creators** (here `@motokew` + `@foodkh` = 2).
 - `mentions` = one entry per clip: `clip_id`, `creator`, `speaker_opinion`.
-- `category`, `price_range`, `area`, `area_description`, `opening_hours`, `menu_items` = **lists of unique values** from all clips. `area` also takes the districts from places.json.
+- `category`, `price_range`, `area_description`, `opening_hours`, `menu_items` = **lists of unique values** from all clips.
+- `area` = **one district** (text, or `null`): the first district in places.json, else the first one from the clips. If there is more than one (e.g. branches), the script warns and shows the first. One district per branch is for Capstone 2.
 - The script warns when clips disagree on `category`, `price_range` or `opening_hours`. The team checks these.
 - Only `verified` places with a `place_id` are published. Others are left out; one that has a `place_id` but isn't `verified` gets a warning.
 - A clip with no `creator` is still listed in `mentions`, but it does not count in `popularity`.
@@ -217,7 +218,7 @@ In stage 4:
 | `category` | One value from the category list (section 9) |
 | `sub_category` | Short free text, e.g. "tea", "Vietnamese" |
 | `price_range` | Only if said or written (caption) for this place, as given, e.g. "$5-10", "10,000 riel" |
-| `area` | **List** of districts from areas.json. Filled only when the speaker or the caption names a district (English or Khmer). A list because one place can have branches in several districts |
+| `area` | District(s) from areas.json. Stage 4 writes a **list**, filled only when the speaker or the caption names a district (English or Khmer). In 5b the team may write one district as text (`"Chamkar Mon"`) or a list (branches) |
 | `area_description` | What the speaker or the caption says about the location, e.g. "near Russian Market", "📍 Toul Kork". Filled even when `area` is filled |
 | `opening_hours` | Only if said or written, as given, e.g. "7am-10pm" |
 | `speaker_opinion` | Summary of why a visitor would go (section 4) |
@@ -258,7 +259,7 @@ A neighborhood (BKK1, Toul Tom Poung) is **not** a district. It goes in `area_de
 - Written in the language the speaker uses for this place. Not translated.
 - `null` if nothing good or interesting is said or written about the place.
 
-Real output from `clips/02.json` (prompt v4): "The shop has many kinds of motorbikes available starting from $9 per day, and the owner is generous and kind."
+Real output from an early test clip (prompt v4): "The shop has many kinds of motorbikes available starting from $9 per day, and the owner is generous and kind."
 
 ---
 
@@ -291,14 +292,14 @@ A person changes the status to `verified` (or `rejected`) after checking. Only `
 2. Search the place on Google Maps.
 3. Check it is the right place (name, photos, type).
 4. Copy the Share link into `google_maps_url`.
-5. Pick the district from areas.json, using the Maps address. Write it in `area` as a list, e.g. `["Chamkar Mon"]`. For branches, add one district per branch.
+5. Pick the district from areas.json, using the Maps address. Write it in `area`: `"Chamkar Mon"` or `["Chamkar Mon"]` (both work). For branches, a list with one district per branch.
 6. Can't find it? Leave both `null`, write what you tried in `cleaner_note`, and keep the status `needs_review` (held back, not on the website). Skip step 7's status.
 7. Write your name in `cleaned_by` and set the status: `verified` (it goes on to 5c and the website) or `rejected`.
 8. Check your work: `python stage5b_validate_clips.py data/clips/*.json`. It changes nothing and lists mistakes, e.g. a misspelled status (`"verfied"`), a district not spelled as in areas.json (`"7 Makara"` → `"Prampi Makara"`), or `"nothing"` instead of `null`. Fix until it shows `problems (0)`, then run 5c.
 
 Example: "near Russian Market" → found on Google Maps → address in Chamkar Mon → `"area": ["Chamkar Mon"]`.
 
-Fill `google_maps_url` before stage 5c. Stage 5c copies it into places.json only when it creates a new place. After that, edit the link in places.json.
+Fill `google_maps_url` and `area` before stage 5c. Stage 5c copies the link into places.json only when it creates a new place, and it only **adds** districts, never removes one. The website shows the **first** district in places.json. So to fix a link or a district after 5c, edit places.json (put the right district first, remove the wrong one).
 
 ### Name
 
@@ -308,6 +309,15 @@ The website shows **one name per place**. Pick it before stage 5c:
 2. If a name in `place_name_alt` is the right one, swap them: the right name in `place_name`, the other in `place_name_alt`. Keep the misheard name in `place_name_alt`, so future clips that mishear it the same way still match.
 
 The name only counts when stage 5c **creates** the place in places.json. For a place already in places.json, the website name is `place_name` in places.json: edit it there. The old name is already in `aliases`, so matching still works. When a clip calls a known place something else, stage 5c says so once in its report: `website name stays "…"`.
+
+### Same place, other names
+
+Creators often call one place by different names. Gemini doesn't know the names we already have (planned for Capstone 2), so the team links them in 5b:
+
+1. Copy the Maps link of the **right** place (for a branch, the branch in the video). 5c matches by link first, whatever the names are.
+2. Search `data/results/places.json` for the name, the other names and the link. If the place is there, check it is the same shop.
+3. Add every other name said, written or shown in this video to `place_name_alt`. 5c can't match a Khmer name with an English one.
+4. After 5c, decide every unclear place, and check every matched one.
 
 ---
 
@@ -324,6 +334,8 @@ The same video must not be counted twice in `popularity`, and must not cost Gemi
 - Only the link is checked, not the transcript. 5a doesn't open short links (stage 1 already expanded them).
 
 ## 8. Matching places (stage 5c)
+
+5a asks "same **video**?" (exact video number, moves copies away); 5c asks "same **place**?" (Maps link, then names; `verified` only). How the two work together: "5a and 5c" in [tvna_pipeline_explained.md](tvna_pipeline_explained.md).
 
 How a `verified` place gets its `place_id` (`stage5c_match_places.py`).
 
@@ -348,7 +360,7 @@ Also unclear: a Maps link or a name shared by two or more places, and the same n
 - A `place_id` that is not in places.json is reported as `unknown_id`.
 - The team checks the report. For matched and new places, confirm it is the right place by name, aliases and `google_maps_url`.
 - One alias belongs to one place only.
-- Branches of one shop = one place, with every branch's district in `area`.
+- Branches of one shop = one place, with every branch's district in `area` (in places.json; the website file shows only the first).
 - Running the script again does not create duplicate places.
 - A new place gets the clip's `place_name` as its name in places.json. That is the one name shown on the website. `aliases` are for matching only (see "Name" in section 6).
 
@@ -376,7 +388,8 @@ Empty templates (in `templates/`): `tvna_clip_template.json`, `tvna_clip_place_t
 - **Sponsored:** removed for now. One value per clip would count for every place in a multi-place clip. If it comes back, it should be per place.
 - **Final dataset extras:** `url` and `posted_at` in `mentions`, and `sub_category`, are not included.
 - **Score after review:** `completeness` is not recalculated after the team fills fields.
-- **Outside Phnom Penh:** places in other provinces (e.g. Siem Reap in `clips/02.json`) are not rejected automatically. The team decides.
-- **Branches:** a place has one `google_maps_url`, even with several branches (5c keeps the first link; other branches' links stay only in their clips). **Next milestone:** one place, many branches, each with its own district and Maps link, all shown on the website. Needs the website team's OK (changes places.json and final_dataset.json).
+- **Outside Phnom Penh:** places in other provinces (e.g. Siem Reap in an early test clip) are not rejected automatically. The team decides.
+- **Branches:** a place has one `google_maps_url`, even with several branches (5c keeps the first link; other branches' links stay only in their clips). `final_dataset.json` shows one district (the first). **Capstone 2:** one place, many branches, each with its own district and Maps link, all shown on the website. Needs the website team's OK (changes places.json and final_dataset.json).
+- **Known names as hints for Gemini (Capstone 2):** save the team's fixes, give known place names to Gemini in stage 4, and score its accuracy. Until then the team links different names in 5b (section 6).
 - **STT script:** `audio-text/test/test_gemini.py` still writes the old format (`source.timestamp`, file `<name>_gemini.json`), not the clip template.
-- **Older docs:** the Google Doc and the older diagrams (`tvna_json_files_diagram.png`, `tvna_pipeline_overview.png`) may not match this guide.
+- **Older docs:** the Google Doc "TVNA Data Pipeline" may not match this guide. The diagrams in `docs/` were redrawn on 2026-11-18.

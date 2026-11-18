@@ -393,6 +393,15 @@ same = clip("PP-422", dict(place_name="old gemini name noodle-house"))
 out = run(same)
 check("W4 same name in other capitals: no note", pid(same) == "tvna_p_0950" and "website name stays" not in out, out)
 
+# Area typed by the team as one district (text), not a list
+t1 = clip("PP-430", dict(place_name="Text Area Tea House", area="Sen Sok"))
+out = run(t1)
+new_id = pid(t1)
+check("T1 area as text: new place gets it as a list in places.json", bool(new_id) and entry(new_id)["area"] == ["Sen Sok"], out)
+t2 = clip("PP-431", dict(place_name="Text Area Tea House", area="Daun Penh"))
+out = run(t2)
+check("T2 area as text on a match: district added", pid(t2) == new_id and entry(new_id)["area"] == ["Sen Sok", "Daun Penh"], out)
+
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(0 if all(results) else 1)

@@ -110,8 +110,18 @@ code, out = one(good_place(area=["7 Makara"]))
 check('4 area "7 Makara": not a district, suggests "Prampi Makara"',
       code == 1 and 'area "7 Makara" is not one of the 14 districts' in out and 'Did you mean "Prampi Makara"?' in out, out)
 code, out = one(good_place(area="Prampi Makara"))
-check('4 area as text, not a list: says write ["…"]',
-      code == 1 and 'area must be a list, e.g. ["Prampi Makara"]' in out, out)
+check('4 area as text (one district): fine, like a list', code == 0 and "ready (1)" in out, out)
+code, out = one(good_place(area="7 Makara"))
+check('4 area as text, not a district: problem + suggestion',
+      code == 1 and 'area "7 Makara" is not one of the 14 districts' in out and 'Did you mean "Prampi Makara"?' in out, out)
+for bad in (7, {"district": "Prampi Makara"}, ["Prampi Makara", 7]):
+    code, out = one(good_place(area=bad))
+    check(f"4 area {bad!r}: not text or a list of text, problem",
+          code == 1 and "area must be a district as text" in out, out)
+code, out = one(good_place(area=""))
+check('4 area "": write null', code == 1 and 'area: write null, not ""' in out, out)
+code, out = one(good_place(area=["Prampi Makara", None]))
+check("4 area list with a null item: not called a type problem", "area must be a district as text" not in out, out)
 code, out = one(good_place(area=["Boeung Keng Kang"]))
 check("4 area misspelled district: problem + suggestion",
       code == 1 and 'Did you mean "Boeng Keng Kang"?' in out, out)

@@ -4,6 +4,24 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-18: Different names for one place: the team links them now, Gemini hints in Capstone 2
+
+**Decision:** when creators call one place by different names, the team links them in 5b: the Maps link of the right place (5c matches by link first), a search of `places.json`, every other name in `place_name_alt`, and a decision on every unclear match after 5c. Giving Gemini the known names as hints (with saving the team's fixes and a test score) moves to Capstone 2.
+
+**Why:** 5c already matches different names through the Maps link, the aliases and close spellings, and asks a person when unsure. The hints need many reviewed clips to learn from and to score; only one clip is verified so far.
+
+**Other options:** build the hints now (rejected: too few reviewed clips to know if it helps).
+
+## 2026-11-18: The website file has one district per place
+
+**Decision:** in `final_dataset.json`, `area` is one district as text (e.g. `"Chamkar Mon"`), or `null`, not a list. It is the first district in `places.json`, or else the first one from the clips. When a place has more than one, stage 6 warns and says which one the website shows. `places.json` still keeps `area` as a list, so no district is lost. In clip files the team may write one district as text or a list; the 5b checker accepts both, and 5c and 6 read both.
+
+**Why:** for now the website shows one district per place. Branches (one place, many branches, each with its own district and Maps link) are planned for Capstone 2.
+
+**Other options:** keep the list (rejected: the website wants one value for now); pick the district named by the most clips (rejected: harder to explain; the first one matches how 5c keeps the first Maps link).
+
+**Note for the website team:** `area` in `data/results/final_dataset.json` is now text or `null`, not a list.
+
 ## 2026-11-18: data/ is grouped by what the files are
 
 **Decision:** `areas.json` moved to `data/reference/` (fixed lists, set once). `places.json` and `final_dataset.json` moved to `data/results/` (made by stages 5c and 6). `clips/`, `audio/` and `gemini_answers/` stay as they are.
@@ -67,7 +85,7 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 **Why:** with the caption, stage 3 wrote the caption's spelling, so the heard spelling disappeared from the transcript. Stage 4 then couldn't keep it in `place_name_alt`.
 
-**Lesson:** every plan now follows one real clip through all stages (in "Coming next", next milestone).
+**Lesson:** every plan now follows one real clip through all stages (in "Coming next", Capstone 2).
 
 ## 2026-11-17: One name on the website
 
@@ -86,7 +104,7 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ## 2026-11-17: Caption now, counts later
 
-**Decision:** stage 2 saves only the caption for now. View, like, comment and share counts are for the next milestone.
+**Decision:** stage 2 saves only the caption for now. View, like, comment and share counts are for Capstone 2.
 
 ## 2026-11-17: Checks before every push
 

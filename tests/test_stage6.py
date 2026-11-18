@@ -113,9 +113,10 @@ check('8 creator "" / null / missing -> null, not counted in popularity, warned'
       m1.get("PP-002", {}).get("creator") is None and r1.get("popularity") == 1 and r2.get("popularity") == 0
       and r3.get("popularity") == 0 and r3.get("mentions", [{}])[0].get("creator", "x") is None
       and all(f"PP-00{n}.json: no creator" in out for n in (2, 3, 4)), (r1, out))
-check("9 lists: values from every clip, no repeats, areas only real districts",
-      r1.get("price_range") == ["$1-3"] and r1.get("category") == ["cafe"] and r1.get("area") == ["Tuol Kouk"]
-      and "area 'Toul Kork' is not a district" in out, (r1, out))
+check("9 lists: values from every clip, no repeats; area is one real district, null when none",
+      r1.get("price_range") == ["$1-3"] and r1.get("category") == ["cafe"] and r1.get("area") == "Tuol Kouk"
+      and r2.get("area", "x") is None and r3.get("area", "x") is None
+      and "area 'Toul Kork' is not a district" in out and "more than one district" not in out, (r1, r2, r3, out))
 
 # D. one name per place on the website
 template = load(PIPE / "templates/tvna_final_dataset_template.json")[0]
@@ -249,6 +250,44 @@ check("V4 same unchecked place twice in one clip: warned once",
       out.count('PP-601.json "Tea Kingdom": verification_status "needs_review"') == 1, out)
 check("V5 no creator warning for a clip with nothing published; a rejected place is not counted as missing an id",
       "no creator" not in out and "no place_id yet" not in out, out)
+
+# A. area: one district per place (branches: next milestone)
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+write(PLACES, [drop_missing(e) for e in [
+    {"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "area": ["Chamkar Mon"]},
+    {"place_id": "tvna_p_0002", "place_name": "Brown Coffee", "area": []},
+    {"place_id": "tvna_p_0003", "place_name": "Luv selfie booth", "area": None},
+    {"place_id": "tvna_p_0004", "place_name": "Beans Barley", "area": MISSING}]])
+clip("PP-701", [place(place_id="tvna_p_0001", area=["Daun Penh"]),
+                place(place_id="tvna_p_0002", place_name="Brown Coffee", area=["Sen Sok"]),
+                place(place_id="tvna_p_0003", place_name="Luv selfie booth", area="Daun Penh"),
+                place(place_id="tvna_p_0004", place_name="Beans Barley", area=["BKK1"])])
+clip("PP-702", [place(place_id="tvna_p_0002", place_name="Brown Coffee", area=["Daun Penh", "sen sok"])])
+code, out = run()
+rec = {r["place_id"]: r for r in load(OUT)} if OUT.exists() else {}
+area = {k: r.get("area", "x") for k, r in rec.items()}
+check("A1 area is one district (text), never a list",
+      code == 0 and all(isinstance(a, str) or a is None for a in area.values()), area)
+check("A2 places.json district comes first; a different clip district is warned, not shown",
+      area.get("tvna_p_0001") == "Chamkar Mon"
+      and "tvna_p_0001: more than one district ['Chamkar Mon', 'Daun Penh'], the website shows 'Chamkar Mon'" in out,
+      (area, out))
+check("A3 places.json area [] / null: the first clip district; two districts across clips warned once",
+      area.get("tvna_p_0002") == "Sen Sok" and area.get("tvna_p_0003") == "Daun Penh"
+      and out.count("tvna_p_0002: more than one district ['Sen Sok', 'Daun Penh']") == 1
+      and "tvna_p_0003: more than one district" not in out, (area, out))
+check("A4 places.json area missing, clip has only a non-district: area null, warned",
+      area.get("tvna_p_0004", "x") is None and "tvna_p_0004: area 'BKK1' is not a district" in out, (area, out))
+bad = clip("PP-703", [place(place_id="tvna_p_0002", place_name="Brown Coffee", area=["Sen Sok", 7])])
+code_bad, out_bad = run()
+check("A6 area typed as a number: no crash, warned, left out",
+      code_bad == 0 and "tvna_p_0002: area 7 is not a district" in out_bad, out_bad)
+bad.unlink()
+code, out = run()
+raw_out = OUT.read_bytes() if OUT.exists() else b""
+code2, out2 = run()
+check("A5 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

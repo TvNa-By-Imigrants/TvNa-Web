@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TVNA pipeline at a glance</title>
+<style>
+  :root {
+    --ink: #1f2933; --muted: #5b6672; --line: #9aa5b1; --bg: #ffffff; --code-bg: #f1f3f5;
+    --s1: #2563eb; --s2: #0891b2; --s3: #059669; --s4: #ca8a04; --s5: #9333ea; --s6: #ea580c;
+    --tag-person-bg: #dbeafe; --tag-person: #1e3a8a;
+    --tag-script-bg: #dcfce7; --tag-script: #166534;
+    --tag-ai-bg: #fef3c7; --tag-ai: #92400e;
+    --gap: 16px; --radius: 14px;
+  }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: Helvetica, Arial, sans-serif; }
+  .page { width: 1960px; padding: 36px 44px 32px; box-sizing: border-box; }
+  h1 { font-size: 40px; margin: 0 0 8px; }
+  .sub { font-size: 21px; color: var(--muted); margin: 0 0 30px; }
+  .row { display: flex; align-items: stretch; gap: var(--gap); }
+  .arrow { align-self: center; color: var(--line); font-size: 28px; }
+  .card { flex: 1; border: 4px solid var(--c); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+  .head { background: var(--c); color: #fff; padding: 12px 16px 12px; }
+  .head small { display: block; font-size: 18px; }
+  .head b { display: block; font-size: 26px; margin-top: 2px; }
+  .body { padding: 14px 16px 18px; font-size: 18px; line-height: 1.5; }
+  .label { font-size: 15px; color: var(--muted); letter-spacing: .04em; margin-top: 10px; }
+  .tags { margin-bottom: 4px; }
+  .tag { display: inline-block; font-size: 16px; font-weight: bold; border-radius: 8px; padding: 2px 9px; margin-right: 4px; }
+  .person { background: var(--tag-person-bg); color: var(--tag-person); }
+  .script { background: var(--tag-script-bg); color: var(--tag-script); }
+  .ai { background: var(--tag-ai-bg); color: var(--tag-ai); }
+  code { font-family: Menlo, monospace; font-size: 17px; background: var(--code-bg); border-radius: 4px; padding: 1px 5px; line-height: 1.8; }
+  .legend { margin-top: 22px; font-size: 19px; color: var(--muted); }
+  .legend .tag { margin-left: 18px; }
+  .legend .tag:first-child { margin-left: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>TVNA pipeline at a glance</h1>
+  <p class="sub">One JSON file per clip moves through all stages. Each stage fills only its own fields. Only places a person verified reach the website.</p>
+  <div class="row">
+    <div class="card" style="--c: var(--s1)">
+      <div class="head"><small>Stage 1</small><b>Collect</b></div>
+      <div class="body">
+        <div class="tags"><span class="tag person">Person</span><span class="tag script">Script</span></div>
+        <div class="label">DOES</div>
+        A person gives TikTok links. The script skips videos already collected
+        <div class="label">FILLS</div>
+        <code>clip_id</code> <code>source</code>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="card" style="--c: var(--s2)">
+      <div class="head"><small>Stage 2</small><b>Audio + caption</b></div>
+      <div class="body">
+        <div class="tags"><span class="tag script">Script</span></div>
+        <div class="label">DOES</div>
+        16 kHz mono WAV; saves the creator's caption
+        <div class="label">FILLS</div>
+        <code>audio_file</code> <code>source.caption</code>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="card" style="--c: var(--s3)">
+      <div class="head"><small>Stage 3</small><b>Audio → transcript</b></div>
+      <div class="body">
+        <div class="tags"><span class="tag script">Script</span><span class="tag ai">Gemini</span></div>
+        <div class="label">DOES</div>
+        Khmer and English written as spoken (audio only)
+        <div class="label">FILLS</div>
+        <code>stt</code> (+ <code>ground_truth</code> on test clips)
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="card" style="--c: var(--s4)">
+      <div class="head"><small>Stage 4</small><b>Transcript + caption → places</b></div>
+      <div class="body">
+        <div class="tags"><span class="tag ai">Gemini</span><span class="tag script">Rules</span></div>
+        <div class="label">DOES</div>
+        Finds each place and what was said about it; scores it and sets a status
+        <div class="label">FILLS</div>
+        <code>place_name</code> <code>category</code> <code>area_description</code> … <code>completeness</code> <code>verification_status</code>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="card" style="--c: var(--s5)">
+      <div class="head"><small>Stage 5</small><b>Check</b></div>
+      <div class="body">
+        <div class="tags"><span class="tag script">Script</span><span class="tag person">Team</span></div>
+        <div class="label">DOES</div>
+        5a moves duplicate videos<br>
+        5b team review (Google Maps) + checker<br>
+        5c match to places.json
+        <div class="label">FILLS</div>
+        <code>area</code> <code>google_maps_url</code> <code>verification_status</code> <code>place_id</code>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="card" style="--c: var(--s6)">
+      <div class="head"><small>Stage 6</small><b>Final dataset</b></div>
+      <div class="body">
+        <div class="tags"><span class="tag script">Script</span></div>
+        <div class="label">DOES</div>
+        One record per <code>verified</code> place for the website: one name, one district
+        <div class="label">ADDS</div>
+        <code>popularity</code> <code>mentions</code>
+        <div class="label">WEBSITE FILTERS</div>
+        category, area, price, popularity
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <span class="tag person">Person / Team</span> types or checks by hand
+    <span class="tag script">Script</span> Python code does it automatically
+    <span class="tag ai">Gemini</span> AI model makes the content
+  </div>
+</div>
+</body>
+</html>

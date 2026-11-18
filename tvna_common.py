@@ -55,7 +55,8 @@ GEMINI_BUSY_CODES = {429, 500, 503, 504}
 
 
 def norm(s: Optional[str]) -> str:
-    return "".join(unicodedata.normalize("NFC", s or "").split()).lower()
+    """Compare form of a text; a value that is not text (typed by hand) -> ""."""
+    return "".join(unicodedata.normalize("NFC", s if isinstance(s, str) else "").split()).lower()
 
 
 def load_json(path):

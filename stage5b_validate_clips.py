@@ -66,8 +66,12 @@ def check_place(place: dict, areas: List[dict]) -> List[str]:
         problems.append(f"{key}: write null, not {show(place[key])}")
 
     area = place.get("area")
-    if area is not None and not isinstance(area, list):
-        problems.append(f'area must be a list, e.g. ["{area}"]' if isinstance(area, str) else "area must be a list")
+    if isinstance(area, list):
+        bad_area = not all(v is None or isinstance(v, str) for v in area)
+    else:
+        bad_area = area is not None and not isinstance(area, str)
+    if bad_area:
+        problems.append('area must be a district as text, e.g. "Prampi Makara", or a list of them')
     names = [a["district"] for a in areas] + [a["district_km"] for a in areas]
     for value in as_list(area):
         if isinstance(value, str) and value.strip().lower() not in PLACEHOLDERS and not match_district(value, areas):

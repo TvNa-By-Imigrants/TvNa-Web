@@ -180,7 +180,8 @@ Every name that gets a `place_id` is added to that place's `aliases`, so next ti
 - **Unclear:** write the suggested id in the clip's `place_id` if it's the same shop, or `"new"` if it's a different one. Run 5c again.
 - **Wrong match** (two different shops got one id): in the clip, write `"new"` (or the right id) in `place_id`, **and** in `data/results/places.json` remove the wrong name from the old place's `aliases`. If you skip the second part, the next video with that name comes out "unclear" (checked: `candidates tvna_p_0001, tvna_p_0003`).
 - **Change the website name:** edit `place_name` in `data/results/places.json`. Keep the old name in `aliases`.
-- **Branches** of one shop are one place, with each branch's district in `area`. Same name but a different Maps link → 5c says **unclear** ("another branch or a different place?"): write the existing id for a branch, `"new"` for a different shop. **Limit:** the place keeps only its **first** Maps link; other branches' links stay only in their clips (next milestone: one link per branch).
+- **Fix a district or Maps link after 5c:** edit `data/results/places.json`. 5c only adds districts, never removes one, and the website shows the **first** district in the list.
+- **Branches** of one shop are one place, with each branch's district in `area`. Same name but a different Maps link → 5c says **unclear** ("another branch or a different place?"): write the existing id for a branch, `"new"` for a different shop. **Limit:** the place keeps only its **first** Maps link, and the website file shows only **one** district (the first); other branches' links stay only in their clips (Capstone 2: one district and link per branch).
 
 ---
 
@@ -201,11 +202,11 @@ _Last updated: 2026-11-18_
 
 **Coming next, in order:**
 1. Stages 2–4 refuse a clip file that is a copy of another clip (no TikTok or Gemini call)
-2. The improvement loop: save the team's fixes (3), give them to Gemini as hints (4), a test score (5). Done: keep Gemini's first answer (1), use the TikTok caption (2)
-3. The Phnom Penh check in stage 4
+2. The Phnom Penh check in stage 4
 
-**Next milestone (noted, not built):**
-- **Branches: one place, many branches, linked as one.** Each branch keeps its own district and Google Maps link, so the website shows every branch's link to click. Today a place keeps only one Maps link. (Changes `places.json` and `final_dataset.json`: agree with the website team first.)
+**Capstone 2 (the next milestone; noted, not built):**
+- **The improvement loop:** save the team's fixes, give the known place names to Gemini as hints (so it spells a place the same way for every creator), and a test score. Done already: keep Gemini's first answer, use the TikTok caption. Until then, the team links the different names in 5b (see "Same place, other names").
+- **Branches: one place, many branches, linked as one.** Each branch keeps its own district and Google Maps link, so the website shows every branch's link to click. Today a place keeps only one Maps link and the website file shows one district. (Changes `places.json` and `final_dataset.json`: agree with the website team first.)
 - View/like/comment/share counts.
 - Every plan follows one real clip through all stages.
 - GitHub runs the tests on every push (CI changes only with the team's OK).
@@ -476,7 +477,7 @@ data/clips/PP-002.json            ← after the team fixed it in 5b
 ```
 
 - **Why:** after 5b the clip file no longer shows what Gemini got wrong. Comparing the two files does, e.g. "Gemini said `area: null`, the team wrote the district".
-- **Used by:** nothing yet. Stages 5–6 don't read it, so it doesn't change the website. It's for the improvement loop (Coming next): save the team's fixes, give known names to Gemini as hints, and score Gemini's accuracy.
+- **Used by:** nothing yet. Stages 5–6 don't read it, so it doesn't change the website. It's for the improvement loop (Capstone 2): save the team's fixes, give known names to Gemini as hints, and score Gemini's accuracy.
 - **Rules:** never edit it (the "before" copy would be lost). It's in git. Stage 4 `--force` writes a new one, but a clip the team already reviewed is never redone, so its copy stays.
 
 ---
@@ -542,10 +543,16 @@ Next: python stage5c_match_places.py data/clips/*.json
 
 1. **Name:** is `place_name` right? If a name in `place_name_alt` is better, swap them. Keep the wrong spelling in `place_name_alt` (it helps match future clips). This becomes the website name.
 2. **Google Maps:** search the place, check name and photos, copy the Share link into `google_maps_url`.
-3. **District:** from the Maps address, write it in `area` as a list, spelled exactly as in `data/reference/areas.json`, e.g. `["Chamkar Mon"]`. Branches: one district each. A neighborhood like "BKK1" or "Toul Tompoung" is not a district; it stays in `area_description`.
+3. **District:** from the Maps address, write it in `area`, spelled exactly as in `data/reference/areas.json`: `"Chamkar Mon"` or `["Chamkar Mon"]` (both work). Branches: a list, one district each. A neighborhood like "BKK1" or "Toul Tompoung" is not a district; it stays in `area_description`.
 4. **Other missing fields:** fill only what the video or caption says. Unknown stays `null`.
 5. **Sign it:** your name in `cleaned_by`, a short note in `cleaner_note` (e.g. "district from Google Maps").
 6. **Status:** `"verified"` (correct, goes to the website) or `"rejected"` (not a place, not in Phnom Penh, or wrong).
+
+**Same place, other names.** Creators often call one place by different names (English or Khmer, other spellings). Gemini doesn't know the names we already have (planned for Capstone 2), so **you** link them:
+- **The Maps link links the names.** 5c checks the Google Maps link first. Copy the Share link of the **right** place (for a branch, the branch in the video), and two creators' names for it match even if they look nothing alike.
+- **Is it already in `data/results/places.json`?** Search it for the name, the other names and the link, e.g. `grep -i "hanjan" data/results/places.json`. If it's there, check it is the same shop.
+- **Keep every other name.** Add each name said, written or shown in this video (Khmer name, English name, the sign, another spelling) to `place_name_alt`. 5c can't match a Khmer name with an English one, so these names and the Maps link are the only way they connect.
+- **After 5c:** decide every **unclear** place, and check that each **matched** place really is the same shop (see "What you do" in Stage 5c).
 
 Can't find the place on Maps? Leave `area` and `google_maps_url` as `null`, write what you tried in `cleaner_note`, and **keep the status `needs_review`** (held back, not on the website; someone can try again later).
 
@@ -562,7 +569,7 @@ problems (1):
     - missing_fields [] doesn't match completeness 0.67. Don't edit these two: they record what stage 4 found (see data/gemini_answers/)
 ```
 
-It also catches: `area` written as text instead of a list, a category not in the list, a link that isn't Google Maps, a `verified` place with no district, Maps link or `cleaned_by`, a held-back place with no `cleaner_note`, and a broken JSON file (a missing comma or quote).
+It also catches: `area` that is not text or a list of text, a category not in the list, a link that isn't Google Maps, a `verified` place with no district, Maps link or `cleaned_by`, a held-back place with no `cleaner_note`, and a broken JSON file (a missing comma or quote).
 
 **Done =** `problems (0)`, and every place is `ready` (verified), `rejected`, or held back with a note. Then commit, push, and run 5c.
 
@@ -593,13 +600,14 @@ waiting for review (1):
 **In:** clips + `places.json` + `areas.json`. **Out:** `data/results/final_dataset.json`, one record per place:
 
 - **one name** (`place_name` from places.json); other names never reach the website
-- `category`, `price_range`, `area`, `opening_hours`, `menu_items`: every different value from all clips
+- **one district** in `area` (text, or `null`): the first one in places.json, else the first one from the clips. More than one → a warning (one district per branch: Capstone 2)
+- `category`, `price_range`, `opening_hours`, `menu_items`: every different value from all clips
 - `mentions`: one per clip (`clip_id`, `creator`, `speaker_opinion`)
 - `popularity`: number of different creators who posted about it
 
 Only `verified` places with a `place_id` are published. It warns about the rest, and when clips disagree (e.g. two price ranges). It rebuilds the file from scratch each time.
 
-> **Website team:** since 2026-11-18 the file is at **`data/results/final_dataset.json`** (it was `data/final_dataset.json`). It has **no `place_name_alt`** (since 2026-11-17). Use `place_name`. Fields: `templates/tvna_final_dataset_template.json`.
+> **Website team:** since 2026-11-18 the file is at **`data/results/final_dataset.json`** (it was `data/final_dataset.json`). It has **no `place_name_alt`** (since 2026-11-17). Use `place_name`. `area` is **one district as text** (e.g. `"Chamkar Mon"`) or `null`, not a list (since 2026-11-18). Fields: `templates/tvna_final_dataset_template.json`.
 
 ---
 
