@@ -146,7 +146,7 @@ dd = load(d)
 dd["fields"][0]["place_id"] = "tvna_p_0002"
 d.write_text(json.dumps(dd, ensure_ascii=False, indent=2), encoding="utf-8")
 out = run(d)
-check("5 team wrote the place_id: name saved as alias", "set by the team; new aliases: Luv selfie booth" in out
+check("5 team wrote the place_id: name saved as alias", "has a place_id; new aliases: Luv selfie booth" in out
       and "Luv selfie booth" in entry("tvna_p_0002")["aliases"], out)
 out = run(d)
 check("5 run again: nothing new, just skipped", "skipped (1)" in out and "matched (0)" in out, out)
@@ -266,7 +266,10 @@ NET.clear()
 out = run(*sorted(CLIPS.glob("*.json")))
 check("R all clips: 2nd run changes no file (unclear places stay unclear)",
       all(q.read_bytes() == b for q, b in raw_all.items()) and PLACES.read_bytes() == places_raw
-      and "matched (0)" in out and "new (0)" in out, out)
+      and "new (0)" in out and "new aliases" not in out
+      and 'PP-010.json  "Han-Jan Coffee & Eatery" -> tvna_p_0001 (has a place_id; another district "Daun Penh"' in out, out)
+check("R 2nd run: a different district is reported again (nothing changed, so stage 6's warning is explained)",
+      'another district "Daun Penh", places.json keeps "Chamkar Mon"' in out, out)
 
 # S. hand-typed values and broken connections
 sp = clip("PP-300", dict(place_name="Saffron Lane", place_name_alt="Saffron", google_maps_url=""))
@@ -378,12 +381,12 @@ check("V6 2nd run after verified: nothing changes", swap.read_bytes() == raw and
 # W. a clip calls a known place something else: 5c says once which name the website keeps
 data = load(PLACES)
 data.append({"place_id": "tvna_p_0950", "place_name": "Old Gemini Name Noodle House",
-             "aliases": ["Old Gemini Name Noodle House"], "area": []})
+             "aliases": ["Old Gemini Name Noodle House"], "area": None})
 PLACES.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 fixed = clip("PP-420", dict(place_name="Right Name", place_id="tvna_p_0950"))
 out = run(fixed)
 check("W1 team-set place_id with a new name: alias saved, and the report says the website name stays",
-      'set by the team; new aliases: Right Name; website name stays "Old Gemini Name Noodle House"' in out
+      'has a place_id; new aliases: Right Name; website name stays "Old Gemini Name Noodle House"' in out
       and entry("tvna_p_0950")["place_name"] == "Old Gemini Name Noodle House", out)
 out = run(fixed)
 check("W2 2nd run: skipped, the note is not repeated", "website name stays" not in out and "skipped (1)" in out, out)
@@ -431,6 +434,41 @@ t7 = clip("PP-436", dict(place_name="No District Yet Cafe", area="Chamkar Mon"))
 out = run(t7)
 check("T7 hand-typed area that is not a district, clip with a district: replaced, and the report says so",
       entry(t3_id)["area"] == "Chamkar Mon" and 'district added: Chamkar Mon (was "BKK1", not a district)' in out, out)
+
+# A place with a place_id, another name and another district: the district note every run, the name note once
+wn = clip("PP-440", dict(place_name="Text Area Tea Shop", place_id=new_id, area="Dangkao"))
+out1 = run(wn)
+out2 = run(wn)
+check("W5 1st run: new alias, other district and website name all said",
+      "new aliases: Text Area Tea Shop" in out1 and 'another district "Dangkao"' in out1 and "website name stays" in out1, out1)
+check("W5 2nd run: only the district note again, website name not repeated",
+      'another district "Dangkao"' in out2 and "website name stays" not in out2, out2)
+
+def set_entry_area(place_id, value):
+    data = load(PLACES)
+    next(e for e in data if e["place_id"] == place_id)["area"] = value
+    PLACES.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+# A clip that already has its place_id and adds nothing new: places.json's area is still put right and saved
+set_entry_area(t3_id, "ចំការមន")
+out = run(t7)
+check("T8 area typed in Khmer in places.json: saved as the English name, and the report says so",
+      entry(t3_id)["area"] == "Chamkar Mon" and 'district written as in areas.json: "Chamkar Mon" (was "ចំការមន")' in out, out)
+before = PLACES.read_bytes()
+out = run(t7)
+check("T8 R 2nd run: nothing changes, nothing said", PLACES.read_bytes() == before and "written as in areas.json" not in out, out)
+set_entry_area(t3_id, " Chamkar Mon ")
+run(t7)
+check("T8b district with extra spaces: saved trimmed", entry(t3_id)["area"] == "Chamkar Mon", entry(t3_id))
+t9 = clip("PP-437", dict(place_name="No District Yet Cafe"))
+for old_area, want in [(["BKK1", "near market"], "BKK1"), ([], None), ([None, " "], None)]:
+    set_entry_area(t3_id, old_area)
+    out = run(t9)
+    check(f"T9 old list with no district {old_area}, clip with none: saved as text {want!r}, not left a list",
+          entry(t3_id)["area"] == want and "area saved as text" in out, out)
+    before = PLACES.read_bytes()
+    run(t9)
+    check(f"T9 R {old_area}: 2nd run changes nothing", PLACES.read_bytes() == before)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

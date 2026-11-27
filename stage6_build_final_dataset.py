@@ -13,6 +13,7 @@ Usage:
 """
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from tvna_common import (
@@ -33,10 +34,19 @@ LIST_FIELDS = ["category", "price_range", "area", "area_description", "opening_h
 CHECK_FIELDS = ["category", "price_range", "opening_hours"]
 
 
-def add_unique(values, new):
+def add_unique(values, new) -> list:
+    """Add each value not there yet (capitals and spaces ignored). A number typed by hand is added as text
+    ("5"), so it is neither lost nor joined with another number. Returns the values that were not text."""
+    not_text = []
     for v in new if isinstance(new, list) else [new]:
+        if v is not None and not isinstance(v, str):
+            not_text.append(v)
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                continue  # true/false, {...}: nothing sensible to show
+            v = str(v)
         if v and norm(v) not in {norm(x) for x in values}:
             values.append(v)
+    return not_text
 
 
 def new_record(place):
@@ -65,7 +75,12 @@ def main():
     ap.add_argument("--output", default=FINAL_DATASET_FILE)
     args = ap.parse_args()
 
-    places = {e["place_id"]: e for e in load_json(args.places)}
+    try:
+        places = {e["place_id"]: e for e in load_json(args.places)}
+    except FileNotFoundError:
+        sys.exit(f"{args.places} not found. Run stage 5c first: python stage5c_match_places.py data/clips/*.json")
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        sys.exit(f"Can't read {args.places} ({type(e).__name__}: {e}). Fix it or run stage 5c again. Nothing changed.")
     areas = load_areas(args.areas)
     records, warnings = {}, []
     no_place_id = 0
@@ -103,7 +118,13 @@ def main():
             published = True
 
             for key in LIST_FIELDS:
-                add_unique(rec[key], f.get(key))
+                for value in add_unique(rec[key], f.get(key)):
+                    number = isinstance(value, (int, float)) and not isinstance(value, bool)
+                    if key == "area" and number:
+                        continue  # kept as text ("7"), so the district check below warns about it
+                    warn(f"{label}: {key} {json.dumps(value, ensure_ascii=False)} is not text, "
+                         + ("left out" if key == "area" or not number else f'published as "{value}"')
+                         + ". Fix the clip (stage 5b lists it)")
 
             opinion = text_or_none(f.get("speaker_opinion"))
             mention = next((m for m in rec["mentions"] if m["clip_id"] == clip_id), None)

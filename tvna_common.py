@@ -1,9 +1,11 @@
 """Shared helpers for the TVNA pipeline scripts (see docs/tvna_field_guide.md)."""
 import difflib
 import http.client
+import importlib
 import json
 import re
 import shlex
+import ssl
 import sys
 import time
 import unicodedata
@@ -286,6 +288,20 @@ def models_in_order(first: str, models: List[str]) -> List[str]:
     return [first] + [m for m in models if m != first]
 
 
+def connection_errors() -> tuple:
+    """Errors that mean Gemini didn't answer in time, the line dropped or the answer came cut off
+    (worth trying again), not a bug."""
+    from google.genai import errors
+
+    found = [OSError, errors.UnknownApiResponseError]  # OSError: timeouts, dropped lines
+    for package in ("httpx", "httpx2"):  # the Gemini library uses both; RequestError = timeout, network, cut-off answer
+        try:
+            found.append(importlib.import_module(package).RequestError)
+        except (ImportError, AttributeError):
+            pass
+    return tuple(found)
+
+
 def generate_with_backup(client, models: List[str], contents, config=None):
     """Ask Gemini, trying each model in turn while the earlier ones are busy. Every wait is printed.
     Returns (response, model used). Raises ClipError when all models stay busy, or on any other API error.
@@ -307,8 +323,13 @@ def generate_with_backup(client, models: List[str], contents, config=None):
                 if e.code not in GEMINI_BUSY_CODES:
                     raise ClipError(f"Gemini failed: {e.code} {e.status}: {e.message}") from None
                 reason = f"busy ({e.code})"
-            except Exception as e:
+            except ssl.SSLCertVerificationError as e:  # an OSError, but trying again won't help
+                raise ClipError(f"Gemini call failed: the connection isn't trusted ({e}). "
+                                "Check your network (e.g. a school or hotel Wi-Fi login page).") from None
+            except connection_errors() as e:
                 reason = f"not answering ({type(e).__name__})"
+            except Exception as e:  # anything else is not "busy": show the real cause at once
+                raise ClipError(f"Gemini call failed: {type(e).__name__}: {e}") from None
             if attempt < GEMINI_TRIES_PER_MODEL:
                 wait = GEMINI_WAITS[attempt - 1]
                 print(f"  {model} is {reason}, trying again in {wait} s ({attempt + 1}/{GEMINI_TRIES_PER_MODEL})",

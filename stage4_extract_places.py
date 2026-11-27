@@ -19,6 +19,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import List, Literal, Optional
 
@@ -56,8 +57,7 @@ PROMPT_VERSION = "v5"
 PART_SIZE = 60
 PART_STEP = 50
 # When the same place shows up again in a later part:
-FILL_IF_EMPTY = ["category", "sub_category", "price_range", "area", "area_description", "opening_hours",
-                 "speaker_opinion", "notes"]
+FILL_IF_EMPTY = ["category", "sub_category", "price_range", "area", "opening_hours", "speaker_opinion", "notes"]
 COMBINE = ["place_name_alt", "menu_items"]
 # A "name" that is only @accounts or #hashtags: the prompt forbids it; the code catches slips.
 TAG_ONLY = re.compile(r"(?:[@#]\S+\s*)+")
@@ -223,6 +223,27 @@ def place_status(record: dict, score: float, flags: List[str]) -> str:
     return "needs_review" if status == "auto_added" and unbacked else status
 
 
+def already_said(text: Optional[str], words: str) -> bool:
+    """words are in text as whole words (capitals and extra spaces ignored): "street 5" is not in "street 51"."""
+    def clean(t):
+        return " ".join(unicodedata.normalize("NFC", t or "").lower().split())
+    found = clean(words)
+    return bool(found) and re.search(rf"(?<!\w){re.escape(found)}(?!\w)", clean(text)) is not None
+
+
+def add_location(description: Optional[str], extra: Optional[str]) -> Optional[str]:
+    """area_description with extra added after "; ", unless it already says it, so no location words are lost."""
+    if not extra or already_said(description, extra):
+        return description
+    return f"{description}; {extra}" if description else extra
+
+
+def add_new_names(description: Optional[str], names: List[str], prefix: str = "") -> Optional[str]:
+    """Add the names (districts, neighborhoods) that area_description doesn't say yet, each checked on its own."""
+    new = [n for n in names if not already_said(description, n)]
+    return add_location(description, prefix + ", ".join(new)) if new else description
+
+
 def build_record(p, window, caption=None):
     by_id = {s["id"]: s for s in window}
     raw_ids = p.get("segment_ids") or []
@@ -236,11 +257,9 @@ def build_record(p, window, caption=None):
     area_description = p.get("area_description")
     if not_districts:
         flags.append("area_not_in_areas_list")
-        area_description = area_description or ", ".join(not_districts)
-    if len(area) > 1:
-        # One district per place for now (branches: Capstone 2); the others stay readable here.
-        others = ", ".join(area[1:])
-        area_description = f"{area_description}; also: {others}" if area_description else f"also: {others}"
+        area_description = add_new_names(area_description, not_districts)
+    # One district per place for now (branches: Capstone 2).
+    area_description = add_new_names(area_description, area[1:], "also: ")
 
     name = name_key(p.get("place_name"))
     if not name:
@@ -319,11 +338,11 @@ def merge_record(first: dict, later: dict) -> None:
             first[key] = later[key]
             if key in ("category", "price_range", "area"):
                 first["confidence"][key] = later["confidence"].get(key)
-    # One district per place: another part's district stays readable, as in build_record.
-    other = later.get("area")
-    if first.get("area") and other and other != first["area"] and other not in (first.get("area_description") or ""):
-        desc = first.get("area_description")
-        first["area_description"] = f"{desc}; also: {other}" if desc else f"also: {other}"
+    # Every part's location words are kept (its "also: ..." districts too), and its district if it differs.
+    desc = add_location(first.get("area_description"), later.get("area_description"))
+    if first.get("area") and later.get("area") and later["area"] != first["area"]:
+        desc = add_new_names(desc, [later["area"]], "also: ")
+    first["area_description"] = desc
     first["segment_ids"] = sorted(set(first["segment_ids"]) | set(later["segment_ids"]))
     first["missing_reasons"] = {k: v for k, v in first["missing_reasons"].items() if not first.get(k)}
 

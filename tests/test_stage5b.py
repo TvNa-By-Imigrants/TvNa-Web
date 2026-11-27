@@ -200,6 +200,27 @@ code, out = run(F / "PP-099.json", F / "PP-008.json")
 check("9 a file that doesn't exist: problem, the rest still checked",
       code == 1 and "PP-099.json\n    - can't read the file" in out and "ready (1)" in out, out)
 
+# T. a number, true/false or {...} where text belongs (stage 6 would show it wrong)
+T = WORK / "text"
+for key, value, words in [("price_range", 5, 'price_range: write text in quotes, e.g. "5", not 5'),
+                          ("opening_hours", 7.5, 'opening_hours: write text in quotes, e.g. "7.5", not 7.5'),
+                          ("place_id", 1, 'place_id: write text in quotes, e.g. "1", not 1'),
+                          ("cleaned_by", True, 'cleaned_by: write text in quotes, e.g. "…", not true'),
+                          ("notes", {"a": 1}, "notes: write text in quotes"),
+                          ("menu_items", ["milk tea", 2], 'menu_items: write text in quotes, e.g. ["milk tea", "2"], not ["milk tea", 2]'),
+                          ("place_name_alt", [None], "place_name_alt: write text in quotes")]:
+    f = clip_file(f"PP-T-{key}", [good_place(**{key: value})], folder=T)
+    code, out = run(f)
+    check(f"T {key} = {json.dumps(value)}: problem, says to write text", code == 1 and words in out, out)
+    f.unlink()
+for value in [None, MISSING, "$5", ["milk tea"], "milk tea", []]:
+    text_value = value if not isinstance(value, list) else "$5"
+    f = clip_file("PP-T-ok", [good_place(price_range=text_value, menu_items=value, place_name_alt=value)], folder=T)
+    code, out = run(f)
+    shown = "missing" if value is MISSING else json.dumps(value)
+    check(f"T text / null / missing ({shown}): no 'write text' problem", "write text in quotes" not in out, out)
+    f.unlink()
+
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(0 if all(results) else 1)

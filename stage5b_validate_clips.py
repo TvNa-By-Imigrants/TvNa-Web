@@ -25,6 +25,10 @@ WAITING = ["needs_review", "auto_added"]
 PLACEHOLDERS = {"", "n/a", "na", "none", "nothing", "unknown", "null", "-", "—"}  # should be null
 MAPS_HOSTS = {"maps.app.goo.gl", "goo.gl", "google.com", "maps.google.com"}
 KEY_FIELDS = 3  # place_name, area, speaker_opinion (completeness)
+# Fields the team may type by hand that must hold text (or null). category and area have their own checks.
+TEXT_FIELDS = ["place_id", "place_name", "sub_category", "price_range", "area_description", "google_maps_url",
+               "opening_hours", "speaker_opinion", "cleaned_by", "cleaner_note", "notes"]
+TEXT_LISTS = ["place_name_alt", "menu_items"]  # a list of texts (one text alone is read as a list of one)
 
 
 def close_to(value: str, choices: List[str]) -> str:
@@ -54,6 +58,20 @@ def placeholder_fields(place: dict) -> List[str]:
     return found
 
 
+def as_text(value) -> str:
+    """How the team should write this value: a number in quotes ("5"); anything else that isn't text -> "…"."""
+    if isinstance(value, str):
+        return show(value)
+    return show(str(value)) if isinstance(value, (int, float)) and not isinstance(value, bool) else '"…"'
+
+
+def not_text_fields(place: dict) -> List[str]:
+    """Fields holding a number, true/false or {...} where text belongs, e.g. price_range 5 instead of "5"."""
+    found = [k for k in TEXT_FIELDS if place.get(k) is not None and not isinstance(place[k], str)]
+    return found + [k for k in TEXT_LISTS if place.get(k) is not None
+                    and not all(isinstance(v, str) for v in as_list(place[k]))]
+
+
 def check_place(place: dict, areas: List[dict]) -> List[str]:
     """Mistakes in one place record. An empty list means no problems."""
     problems = []
@@ -64,6 +82,10 @@ def check_place(place: dict, areas: List[dict]) -> List[str]:
 
     for key in placeholder_fields(place):
         problems.append(f"{key}: write null, not {show(place[key])}")
+    for key in not_text_fields(place):
+        value = place[key]
+        example = (f"[{', '.join(as_text(v) for v in as_list(value))}]" if isinstance(value, list) else as_text(value))
+        problems.append(f"{key}: write text in quotes, e.g. {example}, not {show(value)}")
 
     area = place.get("area")
     if isinstance(area, list):

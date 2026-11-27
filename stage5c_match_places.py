@@ -103,19 +103,26 @@ def first_district(value, areas) -> Optional[str]:
 
 
 def set_area(entry, value, areas) -> List[str]:
-    """places.json keeps one district (text): its own, else this clip's. Anything replaced or left out is said."""
+    """places.json keeps one district (text): its own, else this clip's. Every change is said, so it gets saved."""
     old = entry.get("area")
     kept, district = first_district(old, areas), first_district(value, areas)
     if kept:
         entry["area"] = kept
-        if not isinstance(old, list):
-            return []
-        dropped = [d for d in match_districts(old, areas)[0] if d != kept]
-        return ["district saved as text" + (f" (left out: {', '.join(dropped)})" if dropped else "")]
+        if isinstance(old, list):
+            dropped = [d for d in match_districts(old, areas)[0] if d != kept]
+            return ["district saved as text" + (f" (left out: {', '.join(dropped)})" if dropped else "")]
+        # e.g. the Khmer name or extra spaces typed by hand -> the name as in areas.json
+        return [] if old == kept else [f'district written as in areas.json: "{kept}" (was {json.dumps(old, ensure_ascii=False)})']
     if district:
         entry["area"] = district
         was = f" (was {json.dumps(old, ensure_ascii=False)}, not a district)" if old else ""
         return [f"district added: {district}{was}"]
+    if isinstance(old, list):
+        # An old list with no district: keep its first text (a hand-typed "BKK1" stays until a clip brings a district).
+        texts = [v for v in old if isinstance(v, str) and v.strip()]
+        entry["area"] = texts[0] if texts else None
+        return [f"area saved as text: {json.dumps(entry['area'], ensure_ascii=False)} "
+                f"(was {json.dumps(old, ensure_ascii=False)})"]
     return []
 
 
@@ -252,12 +259,16 @@ def main():
                 if set_by_team not in by_id:
                     report["unknown_id"].append(f"{label} -> {set_by_team} is not in places.json")
                     continue
-                notes = remember(by_id[set_by_team], f, names, areas)
-                if notes:
-                    notes += other_district(by_id[set_by_team], f.get("area"), areas) + website_name(by_id[set_by_team], f)
-                    index(by_id[set_by_team])
-                    report["matched"].append(f"{label} -> {set_by_team} (set by the team; {'; '.join(notes)})")
+                entry = by_id[set_by_team]
+                changes = remember(entry, f, names, areas)
+                if changes:
+                    index(entry)
                     places_changed = True
+                # The district note comes every run, so stage 6's district warning is explained here first;
+                # the website name note only when something changed (said once).
+                notes = changes + other_district(entry, f.get("area"), areas) + (website_name(entry, f) if changes else [])
+                if notes:
+                    report["matched"].append(f"{label} -> {set_by_team} (has a place_id; {'; '.join(notes)})")
                 else:
                     skipped += 1
                 continue

@@ -57,7 +57,11 @@ def run():
         try:
             s6.main()
         except SystemExit as e:
-            code = e.code if isinstance(e.code, int) else 1
+            if e.code is None or isinstance(e.code, int):
+                code = e.code or 0
+            else:  # sys.exit("message"): Python prints it and exits with 1
+                out.write(str(e.code))
+                code = 1
         except Exception:
             code = "crashed"
             out.write(traceback.format_exc())
@@ -282,12 +286,58 @@ check("A4 places.json area missing, clip has only a non-district: area null, war
 bad = clip("PP-703", [place(place_id="tvna_p_0002", place_name="Brown Coffee", area=["Sen Sok", 7])])
 code_bad, out_bad = run()
 check("A6 area typed as a number: no crash, warned, left out",
-      code_bad == 0 and "tvna_p_0002: area 7 is not a district" in out_bad, out_bad)
+      code_bad == 0 and "tvna_p_0002: area '7' is not a district" in out_bad and "area 7 is not text" not in out_bad, out_bad)
+bad.unlink()
+bad = clip("PP-704", [place(place_id="tvna_p_0002", place_name="Brown Coffee", area=True),
+                      place(place_id="tvna_p_0003", place_name="Luv selfie booth", area={"d": 1})])
+code_bad, out_bad = run()
+check("A7 area typed as true / {...}: no crash, left out with a warning (not silently)",
+      code_bad == 0 and 'PP-704.json "Brown Coffee": area true is not text, left out' in out_bad
+      and 'PP-704.json "Luv selfie booth": area {"d": 1} is not text, left out' in out_bad, out_bad)
 bad.unlink()
 code, out = run()
 raw_out = OUT.read_bytes() if OUT.exists() else b""
 code2, out2 = run()
 check("A5 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
+
+# B. values typed by hand that are not text: never lost or joined without a word
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+write(PLACES, [{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "area": "Chamkar Mon"}])
+clip("PP-801", [place(place_id="tvna_p_0001", price_range=5, menu_items=["milk tea", 2, True, {"x": 1}])])
+clip("PP-802", [place(place_id="tvna_p_0001", price_range=10, opening_hours=7.5)], creator="@other")
+code, out = run()
+r = load(OUT)[0] if OUT.exists() and load(OUT) else {}
+check("B1 numbers typed in two clips (5 and 10): both kept as text, not joined into one",
+      code == 0 and r.get("price_range") == ["5", "10"] and r.get("opening_hours") == ["7.5"], r)
+check("B2 the clips-disagree warning still shows", "clips disagree on price_range: ['5', '10']" in out, out)
+check("B3 each value that is not text is warned with its clip",
+      'PP-801.json "Tea Kingdom": price_range 5 is not text, published as "5"' in out
+      and 'PP-802.json "Tea Kingdom": price_range 10 is not text, published as "10"' in out, out)
+check("B4 true / {...} in a list: left out and warned; the number kept as text",
+      r.get("menu_items") == ["milk tea", "2"] and "menu_items true is not text, left out" in out
+      and 'menu_items {"x": 1} is not text, left out' in out, (r, out))
+raw_out = OUT.read_bytes()
+code2, out2 = run()
+check("B5 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
+
+# C. places.json missing or broken: a clear message, not a Python error
+PLACES.unlink()
+code, out = run()
+check("C1 no places.json: says run stage 5c first, exit 1, output not written again",
+      code == 1 and "not found. Run stage 5c first" in out and "Traceback" not in out and OUT.read_bytes() == raw_out, out)
+PLACES.write_text("[{\"place_id\": \"tvna_p_0001\",}]", encoding="utf-8")
+code, out = run()
+check("C2 broken places.json: can't read it, exit 1, nothing changed",
+      code == 1 and "Can't read" in out and "Nothing changed" in out and OUT.read_bytes() == raw_out, out)
+PLACES.unlink()
+PLACES.mkdir()
+code, out = run()
+check("C4 places.json is a folder: clear message, no crash", code == 1 and "Can't read" in out and "Traceback" not in out, out)
+PLACES.rmdir()
+write(PLACES, [{"place_name": "no id"}])
+code, out = run()
+check("C3 places.json entry without place_id: clear message, no crash", code == 1 and "Can't read" in out, out)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

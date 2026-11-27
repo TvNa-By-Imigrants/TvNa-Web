@@ -314,9 +314,9 @@ The name only counts when stage 5c **creates** the place in places.json. For a p
 
 Creators often call one place by different names. Gemini doesn't know the names we already have (planned for Capstone 2), so the team links them in 5b:
 
-1. Copy the Maps link of the **right** place (for a branch, the branch in the video). 5c matches by link first, whatever the names are.
+1. Copy the Maps link of the **right** place (for a branch, the branch in the video). 5c matches by link first, whatever the names are, so an English name in one clip and a Khmer name in another still match. Check the name, photos and address first: a wrong link joins the clip to the wrong place (if that link is already in places.json) or makes a duplicate place.
 2. Search `data/results/places.json` for the name, the other names and the link. If the place is there, check it is the same shop.
-3. Add every other name said, written or shown in this video to `place_name_alt`. 5c can't match a Khmer name with an English one.
+3. Add every other name said, written or shown in this video to `place_name_alt`. If the video only says the Khmer name but the caption, the sign or Google Maps shows the English one (or the other way round), add that one too. 5c can't match a Khmer name with an English one by letters.
 4. After 5c, decide every unclear place, and check every matched one.
 
 ---

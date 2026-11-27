@@ -35,7 +35,9 @@ def api_error(code, status, message):
 
 BUSY = lambda: api_error(503, "UNAVAILABLE", "This model is currently experiencing high demand.")  # noqa: E731
 
-class ReadTimeout(Exception):
+import httpx2  # noqa: E402
+
+class ReadTimeout(httpx2.ReadTimeout):  # what the Gemini library raises when no answer comes in time
     pass
 
 class FakeModels:
@@ -183,6 +185,34 @@ reset(plan={"gemini-3.8-flash": [ReadTimeout("timed out")]})
 code, out = run(p6)
 check("7 no answer (timeout): retried, then OK", code == 0 and "is not answering (ReadTimeout), trying again in 10 s" in out
       and len(FAKE.models.calls) == 2, out)
+reset(plan={"gemini-3.8-flash": [ConnectionResetError("connection reset by peer")]})
+code, out = run(p6, "--force")
+check("7 line dropped (OSError): retried, then OK", code == 0 and "is not answering (ConnectionResetError)" in out
+      and len(FAKE.models.calls) == 2, out)
+
+from google.genai import errors as genai_errors  # noqa: E402
+for err in [httpx2.DecodingError("cut-off gzip answer"), genai_errors.UnknownApiResponseError("half a JSON answer")]:
+    reset(plan={"gemini-3.8-flash": [err]})
+    code, out = run(p6, "--force")
+    check(f"7 cut-off answer ({type(err).__name__}): retried, then OK",
+          code == 0 and f"is not answering ({type(err).__name__})" in out and len(FAKE.models.calls) == 2, out)
+import ssl  # noqa: E402
+p7c = clip("PP-006c", audio_file="PP-006.wav")
+raw = p7c.read_bytes()
+reset(plan={"gemini-3.8-flash": [ssl.SSLCertVerificationError(1, "certificate verify failed")]})
+code, out = run(p7c)
+check("7c certificate error: fails at once (no 80 s of retries), not 'busy', clip unchanged",
+      code == 1 and len(FAKE.models.calls) == 1 and not SLEEPS and p7c.read_bytes() == raw
+      and "the connection isn't trusted" in out and "busy" not in out, out)
+
+# 7b. a bug in our code (not a network problem) -> shown at once, not "busy", no waits, no backup
+p7b = clip("PP-006b", audio_file="PP-006.wav")
+raw = p7b.read_bytes()
+reset(plan={"gemini-3.8-flash": [TypeError("Unsupported content type: <class 'int'>")]})
+code, out = run(p7b)
+check("7b a code error (TypeError): fails at once with the real cause, no retry, no backup, clip unchanged",
+      code == 1 and len(FAKE.models.calls) == 1 and not SLEEPS and p7b.read_bytes() == raw
+      and "Gemini call failed: TypeError: Unsupported content type" in out and "busy" not in out, out)
 
 # 8. non-busy error (bad key) -> stop at once, no backup
 make_wav("PP-008.wav")

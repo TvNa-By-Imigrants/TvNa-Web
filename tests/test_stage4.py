@@ -564,6 +564,47 @@ check("F4 2 parts with different districts: the first part's district kept as te
 check("F5 2 parts with different districts: the other part's district kept in area_description",
       "also: Daun Penh" in (f.get("area_description") or ""), f)
 
+q = with_caption("PP-621", CAPTION, transcript=LONG2)
+reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[], area=["Chamkar Mon"],
+                                             area_description="near market")),
+                                  answer(luv(place_name_alt=[], evidence_text="Luv selfie booth is really fun",
+                                             segment_ids=[65], area=["Daun Penh", "Sen Sok"],
+                                             area_description="street 51"))]})
+run(q)
+f = (load(q)["fields"] or [{}])[0]
+check("F6 2 parts, part 2 names 2 districts and its own location: nothing lost",
+      f.get("area") == "Chamkar Mon" and all(w in (f.get("area_description") or "")
+                                              for w in ("near market", "street 51", "Daun Penh", "Sen Sok")), f)
+q = with_caption("PP-622", CAPTION, transcript=LONG2)
+reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[], area=None, area_description="riverside")),
+                                  answer(luv(place_name_alt=[], evidence_text="Luv selfie booth is really fun",
+                                             segment_ids=[65], area=["Daun Penh"], area_description="riverside"))]})
+run(q)
+f = (load(q)["fields"] or [{}])[0]
+check("F7 2 parts, same location words: district filled, words not repeated",
+      f.get("area") == "Daun Penh" and f.get("area_description") == "riverside", f)
+f = one(place(area=["BKK1"], area_description="near Russian Market"))
+check("F8 not a district, description already filled: the name is added, not dropped",
+      f["area"] is None and f["area_description"] == "near Russian Market; BKK1" and "area_not_in_areas_list" in f["flags"], f)
+f = one(place(area=["BKK1", "Chamkar Mon", "Daun Penh"], area_description="in BKK1, Daun Penh side"))
+check("F9 words already in the description are not added again",
+      f["area"] == "Chamkar Mon" and f["area_description"] == "in BKK1, Daun Penh side", f)
+
+check("F10 'street 5' is not already said by 'street 51' (whole words only); #12 vs #123 too",
+      s4.add_location("street 51", "street 5") == "street 51; street 5"
+      and s4.add_location("#123 Norodom", "#12") == "#123 Norodom; #12"
+      and s4.add_location("near Old  Market", "old market") == "near Old  Market", "")
+f = one(place(area=["BKK1", "Toul Tom Poung"], area_description="in BKK1"))
+check("F11 several non-districts: each checked on its own, none written twice",
+      f["area_description"] == "in BKK1; Toul Tom Poung", f)
+q = with_caption("PP-623", CAPTION, transcript=LONG2)
+reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[], area=["Daun Penh"], area_description="street 51")),
+                                  answer(luv(place_name_alt=[], evidence_text="Luv selfie booth is really fun",
+                                             segment_ids=[65], area=["Daun Penh"], area_description="street 5"))]})
+run(q)
+f = (load(q)["fields"] or [{}])[0]
+check("F12 2 parts, 'street 51' then 'street 5': both kept", f.get("area_description") == "street 51; street 5", f)
+
 # E. second review fixes
 f = one(luv(place_name="Brown Coffee & Bakery", place_name_alt=[], name_source="caption", area=["Tuol Kouk"],
             evidence_text="Brown Coffee", segment_ids=[0]), caption="Thanks to our sponsor Brown Coffee, Tuol Kouk")

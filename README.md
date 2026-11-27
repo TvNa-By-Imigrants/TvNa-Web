@@ -549,9 +549,9 @@ Next: python stage5c_match_places.py data/clips/*.json
 6. **Status:** `"verified"` (correct, goes to the website) or `"rejected"` (not a place, not in Phnom Penh, or wrong).
 
 **Same place, other names.** Creators often call one place by different names (English or Khmer, other spellings). Gemini doesn't know the names we already have (planned for Capstone 2), so **you** link them:
-- **The Maps link links the names.** 5c checks the Google Maps link first. Copy the Share link of the **right** place (for a branch, the branch in the video), and two creators' names for it match even if they look nothing alike.
+- **The Maps link links the names.** 5c checks the Google Maps link first. Copy the Share link of the **right** place (for a branch, the branch in the video), and two creators' names for it match even if they look nothing alike, e.g. an English name in one clip and a Khmer name in another. Check the name, photos and address on Maps before you copy: a wrong link joins the clip to the wrong place (if that link is already in places.json) or makes a second, duplicate place.
 - **Is it already in `data/results/places.json`?** Search it for the name, the other names and the link, e.g. `grep -i "hanjan" data/results/places.json`. If it's there, check it is the same shop.
-- **Keep every other name.** Add each name said, written or shown in this video (Khmer name, English name, the sign, another spelling) to `place_name_alt`. 5c can't match a Khmer name with an English one, so these names and the Maps link are the only way they connect.
+- **Keep every other name.** Add each name said, written or shown in this video (Khmer name, English name, the sign, another spelling) to `place_name_alt`. If the video only says the Khmer name but the caption, the sign or Google Maps shows the English one (or the other way round), add that one too. 5c can't match a Khmer name with an English one by letters, so these names and the Maps link are the only way they connect.
 - **After 5c:** decide every **unclear** place, and check that each **matched** place really is the same shop (see "What you do" in Stage 5c).
 
 Can't find the place on Maps? Leave `area` and `google_maps_url` as `null`, write what you tried in `cleaner_note`, and **keep the status `needs_review`** (held back, not on the website; someone can try again later).
