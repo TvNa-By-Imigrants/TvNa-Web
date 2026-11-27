@@ -1,6 +1,6 @@
 # TVNA data pipeline, explained
 
-_For the project supervisor. Last updated: 2026-11-18._
+_For the project supervisor. Last updated: 2026-11-27._
 
 ## In one minute
 
@@ -143,7 +143,7 @@ Every stage is described the same way: what it does, input, output, when it cont
 - **Input:** the WAV file.
 - **Output:** `stt.transcript` in the clip file.
 - **Continues only if:** the WAV file exists and is valid.
-- **If not:** an error says to run stage 2 first. If Gemini is busy, it tries 3 times (waiting 10 s, then 30 s), then switches to the backup model. If both are busy, the clip is not changed and is listed to try again later.
+- **If not:** an error says to run stage 2 first. If Gemini is busy, it tries 3 times (waiting 10 s, then 30 s), then switches to the backup model. If both are busy, the clip is not changed and is listed to try again later. Any other error (not a busy server or a dropped connection) stops at once and shows the real cause.
 - **Why it matters:** stage 3 uses the audio only, on purpose. The transcript keeps the name **as heard**, even when it is misheard. Stage 4 then has both the heard name and the caption's name.
 
 ### Stage 4: Find the places
@@ -173,7 +173,7 @@ Every stage is described the same way: what it does, input, output, when it cont
   - `google_maps_url`: always empty after stage 4; the person finds it.
 - **Steps:** check the name (swap with an alternative name if that one is right), find the place on Google Maps, take the district from the address, fill what is missing, sign with their name in `cleaned_by`, and set the status.
 - **Same place, other names:** creators often call one place by different names (English or Khmer, other spellings). Gemini does not know the names already confirmed (planned for Capstone 2), so the person links them: they copy the Maps link of the **right** place (5c matches by link first, whatever the name), check whether the place is already in `places.json`, and add every other name from the video to `place_name_alt`. After 5c they decide the **unclear** matches.
-- **Check:** `stage5b_validate_clips.py` reads every clip and changes nothing. It lists each place as **to review** (with what is still missing), **ready** (verified, no mistakes) or **problem**. It catches the easy mistakes of editing by hand: a misspelled status ("verfied"), a district not spelled as in `areas.json` ("7 Makara" instead of "Prampi Makara"), "nothing" instead of null, a verified place with no district, Maps link or reviewer name, and a broken file.
+- **Check:** `stage5b_validate_clips.py` reads every clip and changes nothing. It lists each place as **to review** (with what is still missing), **ready** (verified, no mistakes) or **problem**. It catches the easy mistakes of editing by hand: a misspelled status ("verfied"), a district not spelled as in `areas.json` ("7 Makara" instead of "Prampi Makara"), "nothing" instead of null, a number where text belongs (`5` instead of `"5"`), a verified place with no district, Maps link or reviewer name, and a broken file.
 - **Output:** status `verified` (approved) or `rejected`.
 - **Continues only if:** the status is `verified` and the check shows no problems.
 - **Why it matters:** the AI suggests, a person decides. A misheard name can never reach the website without a person seeing it.
@@ -220,7 +220,7 @@ What the person does, case by case:
 - In `places.json`, 5c keeps every name it has seen for that place in `aliases`.
 - These names are used **only for matching**, so the next video with any of them joins the same place. The website shows one name: `place_name` in `places.json`.
 
-Example: "Hanjan Coffee" (from the caption) and "Hanjang Coffee & Eatery" (as heard) are both in `aliases`, so a future video with either name gets the same `place_id`.
+Real example: Beans Barley (`tvna_p_0001`) has the aliases "Beans Barley", "Beans Bali" (PP-005) and "Beans and Barley" (PP-007), so a future video with any of these names gets the same `place_id`.
 
 **Branches (today).** A shop with several branches is **one place** with one `place_id`.
 - When a video shows a known name but a **different** Maps link, 5c doesn't guess. It marks it "unclear: another branch, or a different place?". A person writes the existing `place_id` (a branch) or `"new"` (a different shop).
@@ -329,7 +329,7 @@ data/
 4. **Nothing is lost.** Every name is kept, the AI's first answer is saved untouched, files are moved and never deleted, and git keeps every change.
 5. **Uncertain cases go to a person**, not a guess: unclear matches, names only in the caption, #hashtag names, unknown districts, places not found on Maps.
 6. **Small, separate stages.** Each stage prints what it did and stops, so results can be checked step by step. Running a stage again changes nothing and costs nothing.
-7. **Tested at no cost.** 381 automatic checks use a fake TikTok and a fake Gemini, and run before every update.
+7. **Tested at no cost.** 452 automatic checks use a fake TikTok and a fake Gemini, and run before every update.
 8. **Ready to measure the AI.** Gemini's saved first answer, compared with the team's corrections, will show how accurate it is.
 
 ---

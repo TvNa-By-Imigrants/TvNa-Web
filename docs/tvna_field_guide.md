@@ -1,6 +1,6 @@
 # TVNA JSON field guide
 
-We use **4 kinds of JSON files**. This guide shows each one **in full**, with the **same example place** (Tea Kingdom), so you can see how they connect. Example values only, not real data.
+We use **4 kinds of JSON files** (the 5th template, `tvna_clip_place_template.json`, is one place inside a clip file). This guide shows each one **in full**, with the **same example place** (Tea Kingdom), so you can see how they connect. Example values only, not real data.
 
 - The full process, stage by stage: [tvna_pipeline_explained.md](tvna_pipeline_explained.md).
 - How the files connect: `docs/tvna_data_model.mmd`.
@@ -246,7 +246,7 @@ A neighborhood (BKK1, Toul Tom Poung) is **not** a district. It goes in `area_de
 | `name_is_tag` | The "name" is only @accounts or #hashtags. Status is already `rejected` | If it really is the place, write its real name and change the status |
 | `asr_spelling_or_uncertain_name` | Name confidence is medium or low; maybe a speech-to-text spelling error | Check the spelling on Google Maps |
 | `low_confidence_field` | `category`, `price_range` or `area` has low confidence | Check those fields |
-| `area_not_in_areas_list` | The LLM gave an area that is not a district; it was moved to `area_description` | Pick the district |
+| `area_not_in_areas_list` | The LLM gave an area that is not a district; it was added to `area_description` (if not already there) | Pick the district |
 
 ---
 
@@ -356,7 +356,8 @@ Also unclear: a Maps link or a name shared by two or more places, and the same n
 | Unclear (several places, or only close) | `place_id` stays null. The team writes the suggested id in the clip (same place) or `"new"` (a different place), then runs 5c again | unclear |
 
 - Only `verified` places are matched. `rejected` places are skipped. Every other place is listed as `waiting for review` with its status, and nothing changes for it (not even a `place_id` the team wrote).
-- Skipped: places that already have a `place_id`, `rejected` places, places with no name.
+- A place that already has a `place_id` is not matched again. 5c only adds what is new (another name, a district or Maps link the place didn't have) and reports a different district on every run; otherwise it is counted as skipped.
+- Skipped: `rejected` places, places with no name, and places with a `place_id` that add nothing new.
 - A `place_id` that is not in places.json is reported as `unknown_id`.
 - The team checks the report. For matched and new places, confirm it is the right place by name, aliases and `google_maps_url`.
 - One alias belongs to one place only.
@@ -391,5 +392,5 @@ Empty templates (in `templates/`): `tvna_clip_template.json`, `tvna_clip_place_t
 - **Outside Phnom Penh:** places in other provinces (e.g. Siem Reap in an early test clip) are not rejected automatically. The team decides.
 - **Branches:** a place has one `google_maps_url`, even with several branches (5c keeps the first link; other branches' links stay only in their clips). Every file keeps one district per place (`area` is text). **Capstone 2:** one place, many branches, each with its own district and Maps link, all shown on the website. Needs the website team's OK (changes places.json and final_dataset.json).
 - **Known names as hints for Gemini (Capstone 2):** save the team's fixes, give known place names to Gemini in stage 4, and score its accuracy. Until then the team links different names in 5b (section 6).
-- **STT script:** `audio-text/test/test_gemini.py` still writes the old format (`source.timestamp`, file `<name>_gemini.json`), not the clip template.
-- **Older docs:** the Google Doc "TVNA Data Pipeline" may not match this guide. The diagrams in `docs/` were redrawn on 2026-11-18.
+- **STT script** (outside this repo, in the capstone folder): `audio-text/test/test_gemini.py` still writes the old format (`source.timestamp`, file `<name>_gemini.json`), not the clip template.
+- **Older docs:** the Google Doc "TVNA Data Pipeline" may not match this guide. The diagram sources in `docs/` (`tvna_data_model.mmd`, `tvna_pipeline_overview.html`) were updated on 2026-11-18; the two `.png` pictures are older and still need re-exporting.

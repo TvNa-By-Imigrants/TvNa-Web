@@ -97,8 +97,9 @@ classDiagram
   ClipFile "1" *-- "0..1" Extraction
   ClipFile "1" *-- "0..*" ClipPlace : fields
   ClipPlace "0..*" --> "0..1" Place : place_id
-  ClipPlace "0..*" --> "0..*" Area : area
-  Place "0..*" --> "0..*" Area : area
+  ClipPlace "0..*" --> "0..1" Area : area
+  Place "0..*" --> "0..1" Area : area
+  FinalRecord "0..*" --> "0..1" Area : area
   FinalRecord "1" --> "1" Place : place_id
   FinalRecord "1" *-- "1..*" Mention : mentions
   Mention "0..*" --> "1" ClipFile : clip_id

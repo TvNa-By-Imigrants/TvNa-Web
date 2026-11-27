@@ -4,11 +4,22 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-27: Fixes from a full review of every stage
+
+**Decision:**
+
+- Stage 4 never drops location words. When a long video is read in parts, every part's `area_description` and its other districts are kept ("also: …"). A word counts as already there only as a whole word ("street 5" is not in "street 51").
+- 5c fixes a place's district in `places.json` even when nothing else is new: a Khmer name becomes the English name from `areas.json`, extra spaces go, an old list becomes text. A different district from a clip is reported on every run (so stage 6's warning always has an explanation); "website name stays" is said only once.
+- Stage 6 publishes a number typed by hand as text (`5` → `"5"`) with a warning, instead of losing it. 5b lists it as a problem, so the team fixes it first.
+- Stages 3 and 4 wait and retry only when Gemini is busy, the connection drops or the answer comes cut off. Any other error (a bug, a certificate problem) stops at once with the real cause, instead of 80 s of retries and "Gemini is busy".
+
+**Why:** a review found each of these could lose data or hide a problem without any message.
+
 ## 2026-11-18: Different names for one place: the team links them now, Gemini hints in Capstone 2
 
 **Decision:** when creators call one place by different names, the team links them in 5b: the Maps link of the right place (5c matches by link first), a search of `places.json`, every other name in `place_name_alt`, and a decision on every unclear match after 5c. Giving Gemini the known names as hints (with saving the team's fixes and a test score) moves to Capstone 2.
 
-**Why:** 5c already matches different names through the Maps link, the aliases and close spellings, and asks a person when unsure. The hints need many reviewed clips to learn from and to score; only one clip is verified so far.
+**Why:** 5c already matches different names through the Maps link, the aliases and close spellings, and asks a person when unsure. The hints need many reviewed clips to learn from and to score; only two clips (one café) are verified so far.
 
 **Other options:** build the hints now (rejected: too few reviewed clips to know if it helps).
 
