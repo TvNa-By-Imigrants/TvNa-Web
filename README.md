@@ -725,4 +725,4 @@ Only `verified` places with a `place_id` **and at least 1 photo** are published 
 - [`docs/tvna_pipeline_explained.md`](docs/tvna_pipeline_explained.md): the whole pipeline explained for the supervisor: each stage (input, output, when it continues), statuses, folders, key takeaways, limits.
 - [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md): every field, who fills it, value rules, category list.
 - [`docs/decisions.md`](docs/decisions.md): key decisions and why.
-- [`docs/tvna_data_model.mmd`](docs/tvna_data_model.mmd): how the JSON files connect (the `.png` picture is older: it still shows `places.json`, `place_name_alt` in the final dataset, many districts per place and no photos).
+- [`docs/tvna_data_model.mmd`](docs/tvna_data_model.mmd): how the JSON files connect (picture: `docs/tvna_data_model.png`; overview picture: `docs/tvna_pipeline_overview.png`, from `docs/tvna_pipeline_overview.html`).
