@@ -89,21 +89,29 @@ Here `completeness` is 0.67 because stage 4 found no district. The team added `a
 
 Another clip, `PP-007.json` from creator `@foodkh`, also talks about Tea Kingdom. So its place also has `"place_id": "tvna_p_0005"`.
 
-### File 2: `places.json`, one list for the whole project
+### File 2: place file (`places/tvna_p_0005.json`), one per real place
 
-One entry per **real place**: its name, districts, map link and every name people use for it. `stage5c_match_places.py` creates and updates this file.
+One file per **real place** (until 2026-11-28 all places were in one `places.json`): its name, district, map link, every name people use for it, and its photos. `stage5c_match_places.py` creates and updates it; `stage5d_add_photo.py` adds the photos.
 
 ```json
-[
-  {
-    "place_id": "tvna_p_0005",
-    "place_name": "Tea Kingdom",
-    "aliases": ["Tea Kingdom", "TeaKingdom", "(Khmer name)"],
-    "area": "Boeng Keng Kang",
-    "google_maps_url": "https://maps.app.goo.gl/..."
-  }
-]
+{
+  "place_id": "tvna_p_0005",
+  "place_name": "Tea Kingdom",
+  "aliases": ["Tea Kingdom", "TeaKingdom", "(Khmer name)"],
+  "area": "Boeng Keng Kang",
+  "google_maps_url": "https://maps.app.goo.gl/...",
+  "photos": [
+    {
+      "url": "https://res.cloudinary.com/.../tvna/places/tvna_p_0005-3f9a1c0b7e.jpg",
+      "source": "Google Maps",
+      "credit": "Dara S.",
+      "sha256": "3f9a1c0b7e..."
+    }
+  ]
+}
 ```
+
+`photos`: 1 to 5 (photo 1 is the main one), `[]` for a new place. `source` is `"Google Maps"`, `"Shop's own page"`, `"Own photo"` or `"Other: <where>"`; `credit` is who took or posted it; `sha256` is the picture's fingerprint (so the same picture can't be added twice). Only stage 5d writes them; check with `stage5d_check_photos.py`.
 
 ### File 3: `areas.json`, the fixed district list
 

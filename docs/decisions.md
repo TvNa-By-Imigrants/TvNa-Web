@@ -4,6 +4,23 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-28: Photos belong to the place (stage 5d), on Cloudinary
+
+**Decision:**
+- Photos are added after 5c, only to **new** places (0 photos); a known place already has them. 1 to 5 per place, photo 1 is the main one.
+- `stage5d_add_photo.py` (and later the review page) uses one shared function, `tvna_review.add_photo`. Each photo is checked (20 MB at most, at least 600 px on each side, 5 at most, not the same picture twice), made a 1200 px JPG without EXIF (no GPS), and put on Cloudinary as `tvna/places/<place_id>-<first 10 of sha256>`. Only the link goes in the place file.
+- Each entry is `{url, source, credit, sha256}`. `source` is one of a fixed list; `credit` is needed.
+- Removing a photo takes it off the place file only; the picture stays on Cloudinary.
+- Photos stay in our place files for now. A later step loads them into the website team's database, once the field differences are agreed.
+
+**Why:** the photos show the place, not one video, so they go in the place file. A fixed public_id per picture means a retry replaces the upload instead of making a copy.
+
+**Risk (the user's choice):** Google Maps photos belong to whoever posted them, and Google's terms don't allow re-hosting them. Every photo keeps `source` and `credit`, so these can be found and swapped later.
+
+**Other options:** photos per clip (rejected: the same place would show different photos per video); store the pictures in git (rejected: the repo would grow fast).
+
+---
+
 ## 2026-11-28: One file per place; ids stay numbers until the database
 
 **Decision:**

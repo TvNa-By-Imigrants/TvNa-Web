@@ -394,16 +394,46 @@ def generate_with_backup(client, models: List[str], contents, config=None):
     raise ClipError(f"Gemini is busy (tried {', '.join(models)}). Try this clip again later.")
 
 
-def make_jpg(src: Path, dst: Path, width: int) -> None:
-    """Any picture ffmpeg can read -> a JPG at most `width` px wide, without EXIF (so no GPS or camera data).
-    Raises ValueError with a short reason."""
-    result = subprocess.run(
-        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src), "-frames:v", "1",
-         "-vf", f"scale='min({width},iw)':-2", "-map_metadata", "-1", "-q:v", "3", str(dst)],
-        capture_output=True, text=True)
-    if result.returncode != 0 or not dst.is_file():
+def run_ffmpeg(*args: str) -> None:
+    """Run ffmpeg quietly. Raises ValueError with ffmpeg's last error line."""
+    try:
+        result = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", *args],
+                                capture_output=True, text=True)
+    except FileNotFoundError:
+        raise ValueError("ffmpeg is not installed") from None
+    if result.returncode != 0:
         lines = result.stderr.strip().splitlines()
-        raise ValueError(f"can't read this picture ({lines[-1] if lines else f'ffmpeg exit code {result.returncode}'})")
+        raise ValueError(lines[-1] if lines else f"ffmpeg exit code {result.returncode}")
+
+
+def picture_size(path: Path) -> Tuple[int, int]:
+    try:
+        result = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                 "stream=width,height", "-of", "csv=p=0", str(path)], capture_output=True, text=True)
+    except FileNotFoundError:
+        raise ValueError("ffprobe is not installed (it comes with ffmpeg)") from None
+    try:
+        width, height = (int(n) for n in result.stdout.split()[0].split(","))
+    except (ValueError, IndexError):
+        raise ValueError("no picture size") from None
+    return width, height
+
+
+def make_jpg(src: Path, dst: Path, width: int) -> Tuple[int, int]:
+    """Any picture ffmpeg can read -> a JPG at most `width` px wide, turned the right way up, without EXIF (so no
+    GPS or camera data). Returns the picture's size before shrinking. Raises ValueError with a short reason."""
+    full = dst.with_name(dst.stem + "-full.png")  # 2 steps: a phone's HEIC is tiles, which can't be scaled at once
+    try:
+        run_ffmpeg("-i", str(src), "-frames:v", "1", str(full))
+        size = picture_size(full)
+        run_ffmpeg("-i", str(full), "-vf", f"scale='min({width},iw)':-2", "-map_metadata", "-1", "-q:v", "3", str(dst))
+        if not dst.is_file() or not dst.stat().st_size:
+            raise ValueError("ffmpeg made no picture")
+    except ValueError as e:
+        raise ValueError(f"can't read this picture ({e})") from None
+    finally:
+        full.unlink(missing_ok=True)
+    return size
 
 
 def cloudinary_keys() -> Optional[Tuple[str, str, str]]:

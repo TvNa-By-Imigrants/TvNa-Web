@@ -36,9 +36,9 @@ Turns **TikTok videos about places in Phnom Penh** into `data/results/final_data
 ## The pipeline in one picture
 
 ```
- TikTok links ─► 1 Collect ─► 2 Audio ─► 3 Transcript ─► 4 Places ─► 5b Team review ─► 5c Match ─► 6 Final dataset
- (links.txt)    (duplicates   (TikTok)   (Gemini)        (Gemini)    (people)          (data/places/) (website file)
-                 removed here)
+ TikTok links ─► 1 Collect ─► 2 Audio ─► 3 Transcript ─► 4 Places ─► 5b Team review ─► 5c Match ─► 5d Photos ─► 6 Final dataset
+ (links.txt)    (duplicates   (TikTok)   (Gemini)        (Gemini)    (people)          (data/places/) (people,    (website file)
+                 removed here)                                                                        new places)
 ```
 
 Each video is **one clip file**, `data/clips/PP-001.json`. Every stage reads it, fills its own part, prints what it did and the next command, then stops so you can check.
@@ -52,6 +52,7 @@ Each video is **one clip file**, `data/clips/PP-001.json`. Every stage reads it,
 | **5a. Duplicates** | script | all clip files | moves a second copy of a video to `data/clips/duplicates/` (safety net; stage 1 already stops most) |
 | **5b. Team review** | **people** | places that are not `verified` yet | fills what is missing, then sets `verification_status` to `verified` or `rejected` |
 | **5c. Match** | script | `verified` places | `fields[].place_id` in the clip; one file per real place, `data/places/<place_id>.json` |
+| **5d. Photos** | **people** + script (Cloudinary) | new places (0 photos) | 1–5 photos in the place file: `photos: [{url, source, credit, sha256}]` |
 | **6. Final dataset** | script | clips + `data/places/` + `areas.json` | `data/results/final_dataset.json` (only `verified` places) |
 
 Stages 2, 3 and 4 cost time and Gemini tokens, so duplicates are stopped **before** them, in stage 1.
@@ -206,12 +207,12 @@ _Last updated: 2026-11-28_
 | 5a. Duplicates safety net | `stage5a_dedupe_clips.py` | ✅ |
 | 5b. Team review | by hand, checked by `stage5b_validate_clips.py` | ✅ |
 | 5c. Match places (one file per place; one person at a time) | `stage5c_match_places.py` | ✅ |
+| 5d. Photos for new places (1–5, on Cloudinary) | `stage5d_add_photo.py`, checked by `stage5d_check_photos.py` | ✅ (waiting for the Cloudinary keys) |
 | 6. Final dataset | `stage6_build_final_dataset.py` | ✅ |
 
 **Coming next, in order (the photo plan):**
-1. 5d: 1–5 photos for each new place (Cloudinary)
-2. Stage 6 publishes the photos and each video's cover
-3. Docs for the new flow, then the review page for the team
+1. Stage 6 publishes the photos and each video's cover (a place with no photo is left out)
+2. Docs for the new flow, then the review page for the team
 
 Later: stages 2–4 refuse a clip file that is a copy of another clip; the Phnom Penh check in stage 4.
 
@@ -226,7 +227,7 @@ Later: stages 2–4 refuse a clip file that is a copy of another clip; the Phnom
 
 ## Setup (once per computer)
 
-You need **Python 3.12**, **ffmpeg** and **git**. On a Mac:
+You need **Python 3.12**, **ffmpeg** (with its `ffprobe`; Homebrew installs both; tested with ffmpeg 9.0.2, iPhone HEIC photos included) and **git**. On a Mac:
 
 ```sh
 brew install python@3.12 ffmpeg
@@ -239,7 +240,7 @@ cp .env.example .env
 
 Open `.env` and add your keys. **Never commit `.env`.**
 - `GEMINI_API_KEY=`: from aistudio.google.com.
-- `CLOUDINARY_CLOUD_NAME=`, `CLOUDINARY_API_KEY=`, `CLOUDINARY_API_SECRET=`: from the team's Cloudinary account (ask the team lead). Stage 2 uses them to save each video's cover picture. Without them stage 2 still makes the audio and says the cover was not saved.
+- `CLOUDINARY_CLOUD_NAME=`, `CLOUDINARY_API_KEY=`, `CLOUDINARY_API_SECRET=`: from the team's Cloudinary account (ask the team lead). Stage 2 uses them to save each video's cover picture, and 5d for the place photos. Without them stage 2 still makes the audio and says the cover was not saved; 5d says the keys are missing and adds nothing.
 
 **Every time you open a terminal:**
 
@@ -276,13 +277,16 @@ python stage5b_validate_clips.py data/clips/*.json         # 5b. check the revie
 git pull                                                   # 5c. right before matching
 python stage5c_match_places.py data/clips/*.json           # 5c. one person at a time
 git add data/places data/clips && git commit -m "Match my clips" && git push   # 5c. right after
+python stage5d_check_photos.py                             # 5d. which new places need photos (changes nothing)
+python stage5d_add_photo.py tvna_p_0002 front.jpg inside.jpg --source "Google Maps" --credit "Dara S."   # 5d.
+git add data/places && git commit -m "Photos" && git push  # 5d. right after
 python stage6_build_final_dataset.py data/clips/*.json     # 6. all clips
 ```
 
 - Every command prints the next one. Copy it.
 - Stages 2–4 take one or many clips. One failing doesn't stop the others.
 - `--force` redoes a clip. Stages 3 and 4 never redo a clip the team already reviewed, even with `--force`.
-- Every stage is safe to **run twice**: the second run changes nothing and makes no TikTok or Gemini call (one exception: a short `vt.tiktok.com` link asks TikTok once which video it is).
+- Every stage is safe to **run twice**: the second run changes nothing and makes no TikTok or Gemini call (one exception: a short `vt.tiktok.com` link asks TikTok once which video it is). Adding the same photo twice is refused. `--remove` and `--move` in 5d are hand edits by photo number: they print the new list, so check it instead of running them again.
 
 ---
 
@@ -614,6 +618,26 @@ waiting for review (1):
 
 - **Waiting for review:** not checked in 5b yet. Nothing changes for it.
 - When a clip calls a known place something else, 5c says `website name stays "…"` (the name in its place file).
+
+---
+
+## Stage 5d: photos for new places
+
+**In:** places with **0 photos** (new places from 5c; a known place already has its photos). **Out:** 1–5 photos in the place file. Photo 1 is the main one on the website. A place needs at least 1 to be published (from the next step, C).
+
+```sh
+python stage5d_check_photos.py        # problems / need photos (with the name and Maps link) / ready
+python stage5d_add_photo.py tvna_p_0002 front.jpg "https://lh3.googleusercontent.com/..." --source "Google Maps" --credit "Dara S."
+python stage5d_add_photo.py tvna_p_0002 --move 3 --to 1     # make photo 3 the main one
+python stage5d_add_photo.py tvna_p_0002 --remove 2          # a wrong photo (asks first; the picture stays on Cloudinary)
+```
+
+- **A photo** is a file or an **image link** (on Google Maps: open the photo, right-click → *Copy image address*). A web page link is refused and says this.
+- **Each photo is checked:** JPG, PNG, WebP or HEIC; 20 MB at most; at least 600 px on each side; not the same picture twice; 5 at most. Then it becomes a 1200 px JPG **without hidden photo data** (no GPS, no camera info), goes to Cloudinary as `tvna/places/<place_id>-<code>`, and is saved as `{url, source, credit, sha256}`. `sha256` is the picture's fingerprint, used to refuse the same picture twice.
+- **`--source`:** `"Google Maps"`, `"Shop's own page"`, `"Own photo"` or `"Other: <where>"`. **`--credit`:** who took or posted it (needed). Google Maps photos belong to the person who posted them, so the source and credit let us find and swap them later.
+- Several photos in one command: each is tried, a bad one is said and skipped, the rest are added (exit code 1 if any failed).
+- A place file changed by someone else during an upload is refused: `git pull` and add the photo again.
+- Commit and push the place files right after.
 
 ---
 
