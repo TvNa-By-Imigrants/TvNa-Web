@@ -13,7 +13,7 @@ Turns **TikTok videos about places in Phnom Penh** into `data/results/final_data
 
 **Scope:** TikTok videos only. Places in Phnom Penh only.
 
-**Contents:** [Words you'll see](#words-youll-see) · [The pipeline in one picture](#the-pipeline-in-one-picture) · [How a clip file grows](#how-a-clip-file-grows) · [The status of a place](#the-status-of-a-place) · [The 5 JSON files](#the-5-json-files-templates) · [How `place_id` works](#how-place_id-works) · [Where we are now](#where-we-are-now) · [Setup](#setup-once-per-computer) · [How to run](#how-to-run) · [Test stages 1–6 yourself](#test-stages-16-yourself) · [Stages 1–6](#stage-1-add-videos) · [Team review (5b)](#stage-5b-team-review) · [Team rules](#team-rules)
+**Contents:** [Words you'll see](#words-youll-see) · [The pipeline in one picture](#the-pipeline-in-one-picture) · [How a clip file grows](#how-a-clip-file-grows) · [The status of a place](#the-status-of-a-place) · [The 5 JSON files](#the-5-json-files-templates) · [How `place_id` works](#how-place_id-works) · [Where we are now](#where-we-are-now) · [Setup](#setup-once-per-computer) · [How to run](#how-to-run) · [Test stages 1–6 yourself](#test-stages-16-yourself) · [Stages 1–6](#stage-1-add-videos) · [Team review (5b)](#stage-5b-team-review) · [Photos (5d)](#stage-5d-photos-for-new-places) · [The team's flow](#the-teams-flow) · [Team rules](#team-rules)
 
 ---
 
@@ -25,6 +25,9 @@ Turns **TikTok videos about places in Phnom Penh** into `data/results/final_data
 | **clip file** | the JSON file for one clip, e.g. `data/clips/PP-002.json`. Every stage adds to it |
 | **place** | a shop, café or other spot in a video. One video can show several places |
 | **place record** | one place inside a clip file (the `fields` list has one record per place) |
+| **place file** | one file per **real** place, `data/places/tvna_p_0001.json`: its website name, other names, district, Maps link and photos |
+| **photo** | a picture of a place (1–5 per place), on Cloudinary; the place file keeps its link, source, credit and fingerprint (`sha256`) |
+| **cover** | the TikTok video's own cover picture, shown next to the creator's mention |
 | **status** | `verification_status` of a place: `rejected`, `needs_review`, `auto_added` or `verified` ([see below](#the-status-of-a-place)) |
 | **`place_id`** | the ID of a real place, e.g. `tvna_p_0001`. Two videos about the same café get the same one |
 | **caption** | the text the creator typed under the TikTok video |
@@ -103,7 +106,7 @@ Every place record has a status (`verification_status`). It decides what happens
 | `rejected` | stage 4 or a person | not a real place: no name, only a #hashtag or @account, or a person decided it's wrong or outside Phnom Penh | **no**, never |
 | `needs_review` | stage 4 | found, but something is missing or uncertain | **no**, waits for a person |
 | `auto_added` | stage 4 | found, with all 3 key fields (name, district, opinion) | **no**, waits for a person |
-| `verified` | **a person** (5b) | checked and approved | **yes**, after 5c gives it a `place_id` |
+| `verified` | **a person** (5b) | checked and approved | **yes**, after 5c gives it a `place_id` and 5d at least 1 photo |
 
 **`auto_added` does not add the place anywhere.** It is only a label meaning "this place looks complete". The place stays in its clip file like every other place, and a person must still check it and set `verified`, exactly like `needs_review`. The reviewer just has less to fill in. (The name comes from an old plan to publish complete places without review. That plan was dropped.)
 
@@ -112,7 +115,7 @@ stage 4:     rejected        needs_review        auto_added
                                    └────────┬─────────┘
 stage 5b:          a person checks it:   verified   or   rejected
                    (not found on Google Maps: stays needs_review, held back)
-stage 5c, 6:       only verified places get a place_id and go on the website
+stage 5c, 6:       only verified places get a place_id and go on the website (with at least 1 photo, 5d)
 ```
 
 ---
@@ -210,14 +213,15 @@ _Last updated: 2026-11-28_
 | 5d. Photos for new places (1–5, on Cloudinary) | `stage5d_add_photo.py`, checked by `stage5d_check_photos.py` | ✅ (waiting for the Cloudinary keys) |
 | 6. Final dataset (with photos, video links and covers) | `stage6_build_final_dataset.py` | ✅ |
 
-**Coming next, in order (the photo plan):**
-1. Docs for the new flow, then the review page for the team
+**Coming next, in order:**
+1. The review page for the team (clean, match and add photos in the browser)
+2. Load the places into the website's database (TvNa-Prototype), once the field differences are agreed with the website team
 
 Later: stages 2–4 refuse a clip file that is a copy of another clip; the Phnom Penh check in stage 4.
 
 **Capstone 2 (the next milestone; noted, not built):**
 - **The improvement loop:** save the team's fixes, give the known place names to Gemini as hints (so it spells a place the same way for every creator), and a test score. Done already: keep Gemini's first answer, use the TikTok caption. Until then, the team links the different names in 5b (see "Same place, other names").
-- **Branches: one place, many branches, linked as one.** Each branch keeps its own district and Google Maps link, so the website shows every branch's link to click. Today a place keeps only one Maps link and the website file shows one district. (Changes `places.json` and `final_dataset.json`: agree with the website team first.)
+- **Branches: one place, many branches, linked as one.** Each branch keeps its own district and Google Maps link, so the website shows every branch's link to click. Today a place keeps only one Maps link and the website file shows one district. (Changes the place files and `final_dataset.json`: agree with the website team first.)
 - View/like/comment/share counts.
 - Every plan follows one real clip through all stages.
 - GitHub runs the tests on every push (CI changes only with the team's OK).
@@ -239,7 +243,7 @@ cp .env.example .env
 
 Open `.env` and add your keys. **Never commit `.env`.**
 - `GEMINI_API_KEY=`: from aistudio.google.com.
-- `CLOUDINARY_CLOUD_NAME=`, `CLOUDINARY_API_KEY=`, `CLOUDINARY_API_SECRET=`: from the team's Cloudinary account (ask the team lead). Stage 2 uses them to save each video's cover picture, and 5d for the place photos. Without them stage 2 still makes the audio and says the cover was not saved; 5d says the keys are missing and adds nothing.
+- `CLOUDINARY_CLOUD_NAME=`, `CLOUDINARY_API_KEY=`, `CLOUDINARY_API_SECRET=`: from the team's Cloudinary account (ask the team lead). In the Cloudinary Console they are under **Settings → API Keys**. The secret is like a password: only in `.env`, never in a chat, code or a screenshot. Stage 2 uses them to save each video's cover picture, and 5d for the place photos. Without them stage 2 still makes the audio and says the cover was not saved; 5d says the keys are missing and adds nothing.
 
 **Every time you open a terminal:**
 
@@ -274,7 +278,7 @@ python stage5a_dedupe_clips.py data/clips/*.json           # 5a. safety net
 # 5b. team review, by hand (see Stage 5b), then check it:
 python stage5b_validate_clips.py data/clips/*.json         # 5b. check the review (changes nothing)
 git pull                                                   # 5c. right before matching
-python stage5c_match_places.py data/clips/*.json           # 5c. one person at a time
+python stage5c_match_places.py data/clips/PP-0[4-7]?.json  # 5c. your range only (here PP-040–079), one person at a time
 git add data/places data/clips && git commit -m "Match my clips" && git push   # 5c. right after
 python stage5d_check_photos.py                             # 5d. which new places need photos (changes nothing)
 python stage5d_add_photo.py tvna_p_0002 front.jpg inside.jpg --source "Google Maps" --credit "Dara S."   # 5d.
@@ -298,17 +302,19 @@ source .venv/bin/activate
 T=~/tvna-try                                     # the practice folder (set it again in every new terminal)
 
 python stage1_new_clip.py "<a Phnom Penh TikTok link>" --clips-dir $T/clips
-python stage2_get_audio.py $T/clips/PP-001.json --audio-dir $T/audio
+CLOUDINARY_CLOUD_NAME= python stage2_get_audio.py $T/clips/PP-001.json --audio-dir $T/audio   # no cover upload in practice
 python stage3_transcribe.py $T/clips/PP-001.json --audio-dir $T/audio
 python stage4_extract_places.py $T/clips/PP-001.json --answers-dir $T/answers
 python stage5a_dedupe_clips.py $T/clips/*.json
 # 5b: open $T/clips/PP-001.json and review the place (see Stage 5b); set "verification_status": "verified"
 python stage5b_validate_clips.py $T/clips/*.json
 python stage5c_match_places.py $T/clips/*.json --places-dir $T/places
+python stage5d_add_photo.py tvna_p_0001 <a photo of the place> --source "Own photo" --credit "<your name>" --places-dir $T/places
 python stage6_build_final_dataset.py $T/clips/*.json --places-dir $T/places --output $T/final_dataset.json
 ```
 
-- Stages 2–4 really call TikTok and Gemini (a few free-tier calls per video). Stages 1, 5a, 5b, 5c and 6 cost nothing.
+- Stages 2–4 really call TikTok and Gemini (a few free-tier calls per video). Stage 5d really uploads to the team's Cloudinary (free plan; the practice photo stays there, under `tvna/places/`). Stages 1, 5a, 5b, 5c and 6 cost nothing.
+- `CLOUDINARY_CLOUD_NAME=` in front of stage 2 turns the cover upload off for that one command (it says `cover: not saved`). Without it, the practice clip `PP-001` would upload its cover as `tvna/covers/PP-001` and could replace a real clip's cover.
 - The "Next:" line some stages print says `data/clips/*.json`. In practice, use `$T/clips/*.json` instead.
 - In the practice folder, stage 1 only sees practice clips, so a video you already have in `data/` is **not** a duplicate there.
 
@@ -317,12 +323,13 @@ python stage6_build_final_dataset.py $T/clips/*.json --places-dir $T/places --ou
 | After | Open | You should see |
 |---|---|---|
 | 1 | `$T/clips/PP-001.json` | `source.url`, `video_id`, `creator` filled; everything else `null` |
-| 2 | the same file, and `$T/audio/PP-001.wav` | `audio_file`, `source.caption`; the WAV plays the video's sound |
+| 2 | the same file, and `$T/audio/PP-001.wav` | `audio_file`, `source.caption`, `source.cover_url: ""` (not saved in practice); the WAV plays the video's sound |
 | 3 | the same file | `stt.transcript` matches what is said |
 | 4 | the same file | `fields`: one object per place, with `verification_status`, `missing_fields`, `flags` |
 | 5b | (you edit it) | `cleaned_by` = your name, `"verified"` |
 | 5c | `$T/places/`, and the clip | a new place file `tvna_p_0001.json`; the clip's `place_id` is `tvna_p_0001` |
-| 6 | `$T/final_dataset.json` | one record with your place, `popularity: 1` |
+| 5d | `$T/places/tvna_p_0001.json` | `photos`: one entry with a `https://res.cloudinary.com/…` link, your source and credit |
+| 6 | `$T/final_dataset.json` | one record with your place, its photo, `popularity: 1` |
 
 **Then try these:**
 
@@ -331,8 +338,10 @@ python stage6_build_final_dataset.py $T/clips/*.json --places-dir $T/places --ou
 | Stage 1 again with the same link | `Duplicate: same video as PP-001` |
 | Any stage again | `Skipped`, nothing changes |
 | Copy `PP-001.json` to `PP-001 copy.json`, run 5a | the copy moves to `$T/clips/duplicates/` |
-| 5c and 6 **before** you set `verified` | 5c: `waiting for review`; 6: `0 places` |
+| 5c and 6 **before** you set `verified` | 5c: `waiting for review`; 6: `No place files in … Run stage 5c first` |
 | A second video of the same place, through all stages | 5c gives it the same `tvna_p_0001`; 6: `popularity: 2` |
+| 6 **before** 5d (no photo yet) | `no photo yet, so not published`; `Nothing to publish`: no file is made (an old one is kept) |
+| 5d with the same photo again | `This photo is already on this place (photo 1)` |
 
 When you're done, delete the practice folder (`rm -rf ~/tvna-try`). Nothing in it is shared.
 
@@ -343,8 +352,10 @@ When you're done, delete the practice folder (`rm -rf ~/tvna-try`). Nothing in i
 ```
 TvNa-Web/
 ├── README.md                     ← you are here
-├── stage1_new_clip.py … stage6_build_final_dataset.py   ← one script per stage
+├── stage1_new_clip.py … stage6_build_final_dataset.py   ← one script per stage (5d: stage5d_add_photo.py, stage5d_check_photos.py)
 ├── tvna_common.py                ← shared helpers
+├── tvna_review.py                ← photo rules (add, remove, move, check), for 5d now and the review page later
+├── review/texts_en.json          ← every message the team sees in 5d (English)
 ├── requirements.txt / requirements.lock.txt              ← packages (install from the lock file)
 ├── .env.example                  ← copy to .env, add your key
 ├── data/
@@ -354,7 +365,7 @@ TvNa-Web/
 │   │   └── duplicates/           ← second copies of a video (still count as "already collected")
 │   ├── audio/                    ← WAVs from stage 2 (not in git)
 │   ├── gemini_answers/           ← Gemini's first answer from stage 4 (never edit)
-│   ├── places/                   ← made by 5c: one file per real place, tvna_p_….json (the team may edit names here)
+│   ├── places/                   ← made by 5c: one file per real place, tvna_p_….json (the team may edit names here; 5d adds photos)
 │   └── results/
 │       └── final_dataset.json    ← made by 6 (the website reads this)
 ├── templates/                    ← empty JSON templates
@@ -362,7 +373,7 @@ TvNa-Web/
 └── tests/                        ← offline checks: python tests/run_all.py
 ```
 
-There is no database: these JSON files in git **are** the data. `git pull` gives you everyone's clips.
+There is no database in the pipeline: these JSON files in git **are** the data. `git pull` gives you everyone's clips. Photos and covers are on Cloudinary; the files keep only their links. (The website repo, TvNa-Prototype, has its own Postgres database; loading our places into it is a later step.)
 
 **When a condition is not met, where does the file go?**
 - **Bad link, or a duplicate in stage 1:** no file is made at all.
@@ -622,7 +633,7 @@ waiting for review (1):
 
 ## Stage 5d: photos for new places
 
-**In:** places with **0 photos** (new places from 5c; a known place already has its photos). **Out:** 1–5 photos in the place file. Photo 1 is the main one on the website. A place needs at least 1 to be published (stage 6 leaves it out until then).
+**In:** places with **0 photos**: new places from 5c, and places made before 5d existed (e.g. Beans Barley). `stage5d_check_photos.py` lists them all. **Out:** 1–5 photos in the place file. Photo 1 is the main one on the website. A place needs at least 1 to be published (stage 6 leaves it out until then).
 
 ```sh
 python stage5d_check_photos.py        # problems / need photos (with the name and Maps link) / ready
@@ -637,6 +648,19 @@ python stage5d_add_photo.py tvna_p_0002 --remove 2          # a wrong photo (ask
 - Several photos in one command: each is tried, a bad one is said and skipped, the rest are added (exit code 1 if any failed).
 - A place file changed by someone else during an upload is refused: `git pull` and add the photo again.
 - Commit and push the place files right after.
+
+**Which photos (the photo guide):**
+
+| Photo | What |
+|---|---|
+| 1 (the main one) | the front, with the shop's sign, so people recognise it from the street |
+| 2 | inside: the seats, the room |
+| 3 | a dish or drink they are known for (the one in the video, if you can) |
+| 4–5 | optional: more food, the menu, the view |
+
+- **Avoid:** blurry or dark photos; screenshots with app buttons or text on top; a person's face as the main subject; a photo of another branch or another shop.
+- **From Google Maps:** search the place (or open its Maps link from the checker) → **Photos** → open a photo → right-click it → **Copy image address** → paste that link in the command. The source is `"Google Maps"`, the credit is the name shown on the photo.
+- **Your own photo:** add the file; the source is `"Own photo"`, the credit is your name. Phone photos (HEIC) work; the hidden GPS data is removed.
 
 ---
 
@@ -657,6 +681,20 @@ Only `verified` places with a `place_id` **and at least 1 photo** are published 
 
 ---
 
+## The team's flow
+
+```
+4 ─► 5a ─► 5b CLEAN (your clips) ─► push ─► 5c MATCH (one person at a time) ─► push ─► 5d PHOTOS (new places only) ─► push ─► 6
+```
+
+1. **Split the clips** in ranges of whole tens, e.g. A: `PP-001`–`PP-039`, B: `PP-040`–`PP-079`. You clean and match only your range, so two people never edit the same clip file. Your range as a command: A = `data/clips/PP-00?.json data/clips/PP-0[1-3]?.json`, B = `data/clips/PP-0[4-7]?.json`.
+2. **5b, clean:** review your clips (see [Stage 5b](#stage-5b-team-review)). No photos yet. `stage5b_validate_clips.py` must say `problems (0)`. Commit and push.
+3. **5c, match:** say in the team chat that you start, `git pull`, run 5c on **your range only** (`python stage5c_match_places.py data/clips/PP-0[4-7]?.json`), decide every **unclear** place, commit and push. Then the next person. (One at a time, see [How `place_id` works](#how-place_id-works).)
+4. **5d, photos:** 5c's report lists your **new** places: those are yours to photograph. `stage5d_check_photos.py` lists every place that still needs photos; older places (e.g. Beans Barley, made before 5d) are there too, so agree in the team chat who takes them. Commit and push the place files.
+5. **6, final dataset:** one person runs it after everyone has pushed. A verified place with no photo is left out until it gets one.
+
+---
+
 ## Team rules
 
 **Collecting**
@@ -670,9 +708,14 @@ Only `verified` places with a `place_id` **and at least 1 photo** are published 
 - The caption's spelling of a name wins over the spoken one. One name per place on the website; other names are kept for matching only.
 - Never edit `data/gemini_answers/`. Clips are never deleted, only moved to `duplicates/` (5a).
 
+**Photos**
+- 1 to 5 per place, photo 1 is the main one. Always with `--source` and `--credit`, so a photo can be found and swapped later.
+- For places with no photos yet. A wrong photo: `--remove` it, then add the right one. Collecting better photos for a place that already has good ones is for Capstone 2.
+- Never put the Cloudinary secret anywhere but `.env`.
+
 **Git and safety**
 - Never commit `.env`, videos or WAVs (`.gitignore` blocks them). Never put your API key in code.
-- Before every push: `python tests/run_all.py` must say `Total: N/N passed`. The tests use fake TikTok and Gemini, cost nothing and never touch `data/`.
+- Before every push: `python tests/run_all.py` must say `Total: N/N passed`. The tests use a fake TikTok, Gemini and Cloudinary, cost nothing and never touch `data/`.
 - Every "skip if already done" check is tested with a filled value, `null`, `""` and a missing key, and a second run must change nothing and call nothing.
 
 ---
@@ -682,4 +725,4 @@ Only `verified` places with a `place_id` **and at least 1 photo** are published 
 - [`docs/tvna_pipeline_explained.md`](docs/tvna_pipeline_explained.md): the whole pipeline explained for the supervisor: each stage (input, output, when it continues), statuses, folders, key takeaways, limits.
 - [`docs/tvna_field_guide.md`](docs/tvna_field_guide.md): every field, who fills it, value rules, category list.
 - [`docs/decisions.md`](docs/decisions.md): key decisions and why.
-- [`docs/tvna_data_model.mmd`](docs/tvna_data_model.mmd): how the JSON files connect (the `.png` picture is older: it still shows `place_name_alt` in the final dataset and many districts per place).
+- [`docs/tvna_data_model.mmd`](docs/tvna_data_model.mmd): how the JSON files connect (the `.png` picture is older: it still shows `places.json`, `place_name_alt` in the final dataset, many districts per place and no photos).

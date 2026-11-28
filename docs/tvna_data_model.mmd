@@ -12,12 +12,13 @@ classDiagram
     +str notes
   }
   class Source {
-    <<stage 1 script, caption by stage 2>>
+    <<stage 1 script, caption + cover by stage 2>>
     +str url
     +str video_id
     +str platform
     +str creator
     +str caption
+    +str cover_url
     +date posted_at
     +date collected_at
   }
@@ -61,12 +62,20 @@ classDiagram
     +List~str~ flags
   }
   class Place {
-    <<places.json>>
+    <<places/tvna_p_0001.json, stage 5c>>
     +str place_id
     +str place_name
     +List~str~ aliases
     +str area
     +str google_maps_url
+    +List~Photo~ photos
+  }
+  class Photo {
+    <<stage 5d, 1 to 5>>
+    +str url
+    +str source
+    +str credit
+    +str sha256
   }
   class Area {
     <<areas.json>>
@@ -82,14 +91,22 @@ classDiagram
     +str area
     +List~str~ area_description
     +str google_maps_url
+    +List~FinalPhoto~ photos
     +List~str~ opening_hours
     +List~str~ menu_items
     +int popularity
     +List~Mention~ mentions
   }
+  class FinalPhoto {
+    +str url
+    +str source
+    +str credit
+  }
   class Mention {
     +str clip_id
     +str creator
+    +str video_url
+    +str cover_url
     +str speaker_opinion
   }
   ClipFile "1" *-- "1" Source
@@ -99,8 +116,10 @@ classDiagram
   ClipPlace "0..*" --> "0..1" Place : place_id
   ClipPlace "0..*" --> "0..1" Area : area
   Place "0..*" --> "0..1" Area : area
+  Place "1" *-- "0..5" Photo : photos
   FinalRecord "0..*" --> "0..1" Area : area
   FinalRecord "1" --> "1" Place : place_id
+  FinalRecord "1" *-- "1..5" FinalPhoto : photos
   FinalRecord "1" *-- "1..*" Mention : mentions
   Mention "0..*" --> "1" ClipFile : clip_id
   style ClipFile fill:#E6F1FB,stroke:#185FA5
@@ -109,6 +128,8 @@ classDiagram
   style Extraction fill:#E6F1FB,stroke:#185FA5
   style ClipPlace fill:#E6F1FB,stroke:#185FA5
   style Place fill:#EAF3DE,stroke:#3B6D11
+  style Photo fill:#EAF3DE,stroke:#3B6D11
   style Area fill:#EEEDFE,stroke:#534AB7
   style FinalRecord fill:#FAECE7,stroke:#993C1D
+  style FinalPhoto fill:#FAECE7,stroke:#993C1D
   style Mention fill:#FAECE7,stroke:#993C1D

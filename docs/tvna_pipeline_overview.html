@@ -56,9 +56,9 @@
       <div class="body">
         <div class="tags"><span class="tag script">Script</span></div>
         <div class="label">DOES</div>
-        16 kHz mono WAV; saves the creator's caption
+        16 kHz mono WAV; saves the creator's caption and the video's cover (Cloudinary)
         <div class="label">FILLS</div>
-        <code>audio_file</code> <code>source.caption</code>
+        <code>audio_file</code> <code>source.caption</code> <code>source.cover_url</code>
       </div>
     </div>
     <div class="arrow">→</div>
@@ -91,9 +91,10 @@
         <div class="label">DOES</div>
         5a moves duplicate videos<br>
         5b team review (Google Maps) + checker<br>
-        5c match to places.json
+        5c match to a place file (one per place)<br>
+        5d 1–5 photos for new places (Cloudinary)
         <div class="label">FILLS</div>
-        <code>area</code> <code>google_maps_url</code> <code>verification_status</code> <code>place_id</code>
+        <code>area</code> <code>google_maps_url</code> <code>verification_status</code> <code>place_id</code> <code>photos</code>
       </div>
     </div>
     <div class="arrow">→</div>
@@ -102,9 +103,9 @@
       <div class="body">
         <div class="tags"><span class="tag script">Script</span></div>
         <div class="label">DOES</div>
-        One record per <code>verified</code> place for the website: one name, one district
+        One record per <code>verified</code> place with a photo, for the website: one name, one district
         <div class="label">ADDS</div>
-        <code>popularity</code> <code>mentions</code>
+        <code>photos</code> <code>popularity</code> <code>mentions</code> (with the video link and cover)
         <div class="label">WEBSITE FILTERS</div>
         category, area, price, popularity
       </div>

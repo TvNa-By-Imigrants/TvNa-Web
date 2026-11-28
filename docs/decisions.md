@@ -4,6 +4,16 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-28: Each person cleans, matches and photographs their own range of clips
+
+**Decision:** the team splits the clips in ranges of whole tens (e.g. A: `PP-001`–`PP-039`, B: `PP-040`–`PP-079`). Each person reviews (5b) and matches (5c) only their range, so a shell pattern picks it (`data/clips/PP-0[4-7]?.json`). 5c still runs one person at a time. Each person photographs (5d) the new places from their own 5c report; older places with no photo are shared out in the team chat. One person runs stage 6 after everyone has pushed.
+
+**Why:** two people never edit the same clip file, and the photo work follows the 5c report, so nobody photographs a place twice.
+
+**Other options:** 5c on all clips each time (rejected: it writes into other people's clips and shows them their unclear places).
+
+---
+
 ## 2026-11-28: Stage 6 publishes photos and video links; no photo, not published
 
 **Decision:**

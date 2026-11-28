@@ -1,6 +1,6 @@
 {
   "photo.no_place": "There is no place {place_id} (no file {file}). Check the id, run stage 5c first, or git pull.",
-  "photo.full": "This place already has {max} photos. Remove one first (--remove N) if a better one should go in.",
+  "photo.full": "This place already has {max} photos. If one of them is wrong, remove it first (--remove N), then add the right one.",
   "photo.no_file": "Can't find the file {image}.",
   "photo.too_big": "Too big ({size} MB). The most is 20 MB: save a smaller copy and try again.",
   "photo.download_failed": "Couldn't download this link ({reason}). Open it in your browser: if the photo shows, right-click it → Save image as, then add the saved file.",

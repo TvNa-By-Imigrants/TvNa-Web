@@ -1,14 +1,14 @@
 # TVNA data pipeline, explained
 
-_For the project supervisor. Last updated: 2026-11-27._
+_For the project supervisor. Last updated: 2026-11-28._
 
 ## In one minute
 
 - **What it does:** turns TikTok videos about places in Phnom Penh into a list of places for the TvNa website.
 - **How:** AI (Google Gemini) listens to each video and finds the places. Code checks the AI's answer. **A person approves every place** before it goes on the website.
 - **Scope:** TikTok videos only. Places in Phnom Penh only.
-- **Storage:** JSON files in git. No database.
-- **Status:** all stages are built and tested. 5 real videos have been processed so far; two of them (PP-005 and PP-007, the same café) have been reviewed and approved.
+- **Storage:** JSON files in git. Photos and video covers are on Cloudinary (an image host); the files keep only their links. The pipeline has no database (the website's own repo has one; loading into it is a later step).
+- **Status:** all stages are built and tested. 5 real videos have been processed so far; two of them (PP-005 and PP-007, the same café) have been reviewed and approved. That café now waits for its photos (stage 5d) before it is published.
 
 ---
 
@@ -25,6 +25,9 @@ _For the project supervisor. Last updated: 2026-11-27._
 | **caption** | the text the creator typed under the TikTok video |
 | **transcript** | the words spoken in the video, written down by Gemini |
 | **district** | one of Phnom Penh's 14 districts, from the fixed list `data/reference/areas.json` |
+| **place file** | one file per real place, `data/places/tvna_p_0001.json`: its website name, other names, district, Maps link and photos |
+| **photo** | a picture of a place (1 to 5 per place), stored on Cloudinary |
+| **cover** | the TikTok video's own cover picture, shown next to the creator's opinion |
 
 ---
 
@@ -39,19 +42,21 @@ flowchart LR
     S4 --> S5a[5a Duplicate check]
     S5a --> S5b[5b Team review]
     S5b --> S5c[5c Match places]
-    S5c --> S6[6 Final dataset]
+    S5c --> S5d[5d Photos]
+    S5d --> S6[6 Final dataset]
 ```
 
 | Stage | Done by | Input | Output | Continues only if |
 |---|---|---|---|---|
 | 1. Collect | script | TikTok links | a new clip file per **new** video | it is a TikTok link, and the video is not collected yet |
-| 2. Audio + caption | script | the video link | the audio (WAV) and the caption | the video can be downloaded and has sound |
+| 2. Audio + caption | script | the video link | the audio (WAV), the caption and the cover picture | the video can be downloaded and has sound |
 | 3. Transcript | Gemini | the audio | the transcript | the audio file exists |
 | 4. Find places | Gemini + code | transcript + caption | one place record per place, with a status | there is a transcript and the caption was read |
 | 5a. Duplicate check | script | all clip files | copies of a video moved aside | (always runs; a safety net) |
 | 5b. Team review | **a person**, checked by a script | places not checked yet | missing fields filled; status `verified` or `rejected` | a person approves the place, and the check finds no mistakes |
-| 5c. Match places | script | `verified` places | a `place_id` for each; the list of real places | the status is `verified` |
-| 6. Final dataset | script | clip files + list of places | `final_dataset.json` for the website | `verified` **and** has a `place_id` |
+| 5c. Match places | script | `verified` places | a `place_id` for each; one place file per real place | the status is `verified` |
+| 5d. Photos | **a person**, checked by a script | new places (no photo yet) | 1 to 5 photos in the place file | each photo passes the checks (at most 20 MB, at least 600 px, at most 5, not twice) |
+| 6. Final dataset | script | clip files + place files | `final_dataset.json` for the website | `verified`, has a `place_id` **and** at least 1 photo |
 
 ---
 
@@ -63,18 +68,20 @@ All code is **Python 3.12**. Package versions are fixed in `requirements.txt` an
 |---|---|---|
 | 1 | Python only | expands short links, reads the video number from each link, compares it with existing clips |
 | 2 | **yt-dlp** 2026.10.26 | downloads the TikTok video; reads its caption and date |
-| 2 | **ffmpeg** | turns the video into a WAV audio file (16 kHz, mono) |
+| 2 | **ffmpeg** | turns the video into a WAV audio file (16 kHz, mono); makes the cover a 720 px JPG without hidden data |
+| 2, 5d | **Cloudinary** (free plan), uploaded with Python's own `urllib` | stores the covers and the place photos; gives back a link |
 | 3 | **Google Gemini API** (`google-genai` 3.0.0), `gemini-3.8-flash`, backup `gemini-3.6-flash` | listens to the audio and writes the Khmer and English words |
 | 4 | **Gemini API**, `gemini-3.6-flash`, backup `gemini-3.8-flash` | reads the transcript and caption, lists the places |
 | 4 | **pydantic** 2.14.3 | makes Gemini answer in a fixed JSON shape; a broken answer is refused |
 | 5b | **Google Maps** + a text editor | a person finds the place, its district and its Maps link |
 | 5b | Python only (`stage5b_validate_clips.py`) | checks the person's edits for mistakes; changes nothing |
 | 5c | Python `difflib` | scores how alike two names are |
+| 5d | **ffmpeg** / ffprobe, Python `hashlib` | checks a photo's size, makes it a 1200 px JPG without hidden data (no GPS), and fingerprints it so the same picture is never added twice |
 | 5a, 6 | Python only | compare and join JSON files |
 
-**Shared by all stages:** git and GitHub (storage and sharing), **python-dotenv** 1.2.4 (reads the Gemini key from a private `.env` file, never from the code), and automatic tests with a fake TikTok and a fake Gemini.
+**Shared by all stages:** git and GitHub (storage and sharing), **python-dotenv** 1.2.4 (reads the Gemini and Cloudinary keys from a private `.env` file, never from the code), and automatic tests with a fake TikTok, a fake Gemini and a fake Cloudinary.
 
-**Cost:** only stages 3 and 4 call the AI. Both use Gemini's free tier.
+**Cost:** only stages 3 and 4 call the AI. Both use Gemini's free tier. Cloudinary's free plan stores the pictures.
 
 ---
 
@@ -130,9 +137,9 @@ Every stage is described the same way: what it does, input, output, when it cont
 
 ### Stage 2: Audio and caption
 
-- **What it does:** downloads the video, keeps only its sound as a WAV file, and deletes the video. It also saves the creator's caption and the date the video was posted.
+- **What it does:** downloads the video, keeps only its sound as a WAV file, and deletes the video. It also saves the creator's caption, the date the video was posted, and the video's cover picture (on Cloudinary).
 - **Input:** the video link in the clip file.
-- **Output:** `data/audio/PP-NNN.wav`, plus `source.caption` and `source.posted_at` in the clip file.
+- **Output:** `data/audio/PP-NNN.wav`, plus `source.caption`, `source.cover_url` and `source.posted_at` in the clip file. A cover that can't be saved (no keys, no internet) doesn't stop the stage; the next run tries again.
 - **Continues only if:** the video can be downloaded and has sound.
 - **If not:** the clip file is not changed, and the reason is printed (e.g. "Download failed").
 - **Why it matters:** the caption is typed by the creator, so it often spells the place's name correctly. Stage 4 uses it.
@@ -172,7 +179,7 @@ Every stage is described the same way: what it does, input, output, when it cont
   - `flags`: what to double-check, e.g. `name_from_caption` (the name is only in the caption);
   - `google_maps_url`: always empty after stage 4; the person finds it.
 - **Steps:** check the name (swap with an alternative name if that one is right), find the place on Google Maps, take the district from the address, fill what is missing, sign with their name in `cleaned_by`, and set the status.
-- **Same place, other names:** creators often call one place by different names (English or Khmer, other spellings). Gemini does not know the names already confirmed (planned for Capstone 2), so the person links them: they copy the Maps link of the **right** place (5c matches by link first, whatever the name), check whether the place is already in `places.json`, and add every other name from the video to `place_name_alt`. After 5c they decide the **unclear** matches.
+- **Same place, other names:** creators often call one place by different names (English or Khmer, other spellings). Gemini does not know the names already confirmed (planned for Capstone 2), so the person links them: they copy the Maps link of the **right** place (5c matches by link first, whatever the name), check whether the place is already in `data/places/`, and add every other name from the video to `place_name_alt`. After 5c they decide the **unclear** matches.
 - **Check:** `stage5b_validate_clips.py` reads every clip and changes nothing. It lists each place as **to review** (with what is still missing), **ready** (verified, no mistakes) or **problem**. It catches the easy mistakes of editing by hand: a misspelled status ("verfied"), a district not spelled as in `areas.json` ("7 Makara" instead of "Prampi Makara"), "nothing" instead of null, a number where text belongs (`5` instead of `"5"`), a verified place with no district, Maps link or reviewer name, and a broken file.
 - **Output:** status `verified` (approved) or `rejected`.
 - **Continues only if:** the status is `verified` and the check shows no problems.
@@ -201,15 +208,15 @@ What the person does, case by case:
 
 ### Stage 5c: Match places (`place_id`)
 
-- **What it does:** many videos show the same café, often with different spellings. 5c gives each `verified` place a `place_id`, and keeps one list of real places, `data/results/places.json`, with all their names. It checks in this order:
+- **What it does:** many videos show the same café, often with different spellings. 5c gives each `verified` place a `place_id`, and keeps one file per real place in `data/places/`, with all its names. New ids are counted numbers (`tvna_p_0002`, …), so one person runs 5c at a time until the website's database hands out the ids. It checks in this order:
   1. same Google Maps link → same place (if it matches two places → unclear);
   2. same name, or a name already known for that place → same place (if two places have that name, or the Maps link is different, e.g. another branch → unclear);
   3. names 95% alike (not used for Khmer names) → same place, and the new spelling is remembered;
   4. names 75–94% alike, one name inside the other, or a close Khmer name → **unclear**: 5c suggests up to 3 places and a person decides;
   5. anything else → a new place.
-- **Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in places.json. Capitals, spaces and punctuation don't matter.
+- **Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in the place files. Capitals, spaces and punctuation don't matter.
 - **Input:** `verified` places.
-- **Output:** a `place_id` in each place record, and `data/results/places.json`.
+- **Output:** a `place_id` in each place record, and the place files in `data/places/`.
 - **If not verified:** the place is listed as "waiting for review" and nothing changes.
 - **Why it matters:** when unsure, it asks a person instead of guessing. Every confirmed name is remembered, so the next video with that spelling matches at once.
 
@@ -217,8 +224,8 @@ What the person does, case by case:
 
 **Other names.** One place often has several names: an English and a Khmer name, a misheard spelling, a short form.
 - In a clip file, stage 4 keeps every other name in `place_name_alt`.
-- In `places.json`, 5c keeps every name it has seen for that place in `aliases`.
-- These names are used **only for matching**, so the next video with any of them joins the same place. The website shows one name: `place_name` in `places.json`.
+- In the place file, 5c keeps every name it has seen for that place in `aliases`.
+- These names are used **only for matching**, so the next video with any of them joins the same place. The website shows one name: `place_name` in the place file.
 
 Real example: Beans Barley (`tvna_p_0001`) has the aliases "Beans Barley", "Beans Bali" (PP-005) and "Beans and Barley" (PP-007), so a future video with any of these names gets the same `place_id`.
 
@@ -240,7 +247,7 @@ Both stages compare clips, but they ask different questions:
 | Looks at | a whole clip file | each place inside a clip |
 | Match must be | exact (same number) | exact link or name, or names 95%+ alike; 75–94% → a person decides |
 | Status needed | none (it ignores the status) | only `verified` places |
-| Result | moves the copy to `data/clips/duplicates/` and adds `"duplicate_of"` | writes a `place_id` in the clip, and updates `places.json` (new place, or new aliases and districts) |
+| Result | moves the copy to `data/clips/duplicates/` and adds `"duplicate_of"` | writes a `place_id` in the clip, and updates the place file (new place, or new aliases and districts) |
 | Person needed? | no | yes, for "unclear" matches |
 | Real example | `PP-006.json` was a hand-made copy of PP-005 (same video) → moved | PP-005 (@motokhiev.bydm) and PP-007 (@pengpos): two videos, same café (Beans Barley, same Maps link) → one `place_id` |
 
@@ -260,14 +267,23 @@ Both stages compare clips, but they ask different questions:
 
 **Why the website needs both:** 5a makes sure one video counts **once** (otherwise its opinion could appear twice). 5c makes sure one place is **one** record (otherwise "Beans Barley" and "Beans and Barley" would be two places). Together, `popularity` is right: Beans Barley = 2 different creators, not one creator counted twice, and not split over two records.
 
+### Stage 5d: Photos (a person)
+
+- **What it does:** a person adds 1 to 5 photos to each place that has none yet: new places from 5c, and places made before 5d existed (Beans Barley). Photo 1 is the main one. A guide says which: the front with the sign, inside, a dish, then optional ones.
+- **Input:** a photo file or an image link (e.g. from Google Maps), with its **source** (Google Maps, the shop's own page, own photo, or other) and its **credit** (who took or posted it).
+- **Checks:** at most 20 MB, at least 600 px on each side, at most 5 per place, not the same picture twice. Then it becomes a 1200 px JPG **without hidden data** (no GPS, no camera info) and goes to Cloudinary. A script (`stage5d_check_photos.py`) lists the places that still need photos and any mistakes.
+- **Output:** `photos: [{url, source, credit, sha256}]` in the place file (`sha256` is the picture's fingerprint).
+- **If a check fails:** nothing is saved, and the message says what to do (e.g. "This is a web page link: right-click the photo → Copy image address").
+- **Why it matters:** the website needs a picture for every place. **Risk (a team choice):** Google Maps photos belong to whoever posted them, and Google's terms don't allow re-hosting them. Every photo keeps its source and credit, so these can be found and replaced later.
+
 ### Stage 6: Final dataset
 
-- **What it does:** joins all clips by `place_id` into **one record per place**: one name, **one district**, its categories and menu items, every creator's opinion, and `popularity` (the number of **different creators** who posted about it).
-- **Input:** the clip files, `places.json` and `areas.json`.
+- **What it does:** joins all clips by `place_id` into **one record per place**: one name, **one district**, its photos, its categories and menu items, every creator's opinion (with the video link and its cover), and `popularity` (the number of **different creators** who posted about it).
+- **Input:** the clip files, the place files and `areas.json`.
 - **Output:** `data/results/final_dataset.json`, the file the website uses.
-- **Continues only if:** the place is `verified` and has a `place_id`.
-- **If not:** the place is left out, and a warning says why. Warnings also show where clips disagree (e.g. two different price ranges).
-- **One district:** `area` is the district in `places.json`, or else the first one from the clips. If clips name other districts (e.g. branches), a warning says which one the website shows. One district per branch is planned for Capstone 2.
+- **Continues only if:** the place is `verified`, has a `place_id` and at least 1 photo.
+- **If not:** the place is left out, and a warning says why (for a missing photo, it gives the command to add one). If **every** verified place still needs a photo, stage 6 stops and keeps the old file, so the website never gets an empty file. Warnings also show where clips disagree (e.g. two different price ranges).
+- **One district:** `area` is the district in the place file, or else the first one from the clips. If clips name other districts (e.g. branches), a warning says which one the website shows. One district per branch is planned for Capstone 2.
 - **Why it matters:** the website shows one name and one district per place. Other spellings stay inside the pipeline, for matching only.
 
 ---
@@ -295,9 +311,9 @@ data/
 │   └── duplicates/       ← copies of a video (moved by 5a, never deleted)
 ├── audio/                ← audio files from stage 2 (on each computer, not in git)
 ├── gemini_answers/       ← Gemini's first answer for each clip (never edited)
-└── results/              ← made by the scripts
-    ├── places.json       ← one entry per real place (verified places only), made by 5c
-    └── final_dataset.json ← the website file (verified places with a place_id only), made by 6
+├── places/               ← one file per real place (verified places only), made by 5c; photos added by 5d
+└── results/
+    └── final_dataset.json ← the website file (verified places with a place_id and a photo), made by 6
 ```
 
 **The status is written inside the clip file, not shown by folders.** One video can show several places, and each place can have a different status (one `verified`, another `rejected`). So the clip file stays in `data/clips/`. Only whole-file duplicates move to another folder.
@@ -313,7 +329,8 @@ data/
 | `needs_review` or `auto_added` | waiting for a person; not published | `data/clips/` (status inside) |
 | Not found on Google Maps | stays `needs_review` with a note (held back) | `data/clips/` (status inside) |
 | `verified`, but the match is unclear | `place_id` stays empty; a person picks it | `data/clips/` |
-| `verified` and matched | gets a `place_id`; published | `data/clips/` + `places.json` + `final_dataset.json` |
+| `verified` and matched, no photo yet | gets a `place_id`; waits for 5d, not published | `data/clips/` + `data/places/` |
+| `verified`, matched, with a photo | published | `data/clips/` + `data/places/` + `final_dataset.json` |
 
 **Nothing is ever deleted.** Rejected places stay in their clip, copies are moved, and git keeps every earlier version.
 
@@ -329,16 +346,16 @@ data/
 4. **Nothing is lost.** Every name is kept, the AI's first answer is saved untouched, files are moved and never deleted, and git keeps every change.
 5. **Uncertain cases go to a person**, not a guess: unclear matches, names only in the caption, #hashtag names, unknown districts, places not found on Maps.
 6. **Small, separate stages.** Each stage prints what it did and stops, so results can be checked step by step. Running a stage again changes nothing and costs nothing.
-7. **Tested at no cost.** 452 automatic checks use a fake TikTok and a fake Gemini, and run before every update.
+7. **Tested at no cost.** 600 automatic checks use a fake TikTok, a fake Gemini and a fake Cloudinary, and run before every update.
 8. **Ready to measure the AI.** Gemini's saved first answer, compared with the team's corrections, will show how accurate it is.
 
 ---
 
 ## 9. Current status, limits and next steps
 
-**Built and tested:** stages 1–6. Stage 5b is done by hand, with a written checklist in the README and a script that checks the review for mistakes.
+**Built and tested:** stages 1–6, including 5d (photos). Stages 5b and 5d are done by hand, each with a guide in the README and a script that checks the work for mistakes.
 
-**Real data:** 5 videos (PP-002 to PP-005, and PP-007) have gone through stage 4. PP-006 was a hand-made copy of PP-005; 5a moved it to `duplicates/`. The team review has started: PP-005 and PP-007 are verified; PP-002, PP-003 and PP-004 are waiting.
+**Real data:** 5 videos (PP-002 to PP-005, and PP-007) have gone through stage 4. PP-006 was a hand-made copy of PP-005; 5a moved it to `duplicates/`. The team review has started: PP-005 and PP-007 are verified (one place, Beans Barley, which now waits for its photos); PP-002, PP-003 and PP-004 are waiting. The Cloudinary account keys still need to be added before covers and photos can be saved.
 
 **Decision (2026-11-18):** a place the team cannot find on Google Maps is **held back**: it stays `needs_review` with a note. It is not published (the website filters by district, so a place with no district would be hard to find) and not rejected (it may be real, just hard to find).
 
@@ -347,15 +364,19 @@ data/
 - `completeness` is not recalculated after the team fills in fields.
 - Two people collecting on different computers at the same time can get the same clip number. Team rule: `git pull` first, push soon after.
 - Gemini is often busy (errors 503 and 504). Stages 3 and 4 then wait or switch model, which can take minutes.
-- Fixing a wrong place match needs two manual edits (the clip file and `places.json`).
+- Fixing a wrong place match needs two manual edits (the clip file and the place file).
+- Only one person can run 5c at a time (new ids are counted numbers) until the website's database gives out the ids.
+- Photos taken from Google Maps may break Google's terms (see 5d); each keeps its source and credit so it can be replaced.
 - A Khmer name and an English name for the same place are matched only through the Google Maps link, or by a person. The team must pick the right Maps place in 5b.
 - A place with several branches keeps only one Google Maps link and shows only one district.
 
 **Next, in order:**
-1. Stages 2–4 refuse a copied clip file before any AI call.
-2. An automatic Phnom Penh check in stage 4.
-3. **Capstone 2 (the next milestone):**
+1. A local review page for the team (clean, match and add photos in the browser instead of editing JSON by hand).
+2. Load the places into the website's database, once the field differences are agreed with the website team.
+3. Stages 2–4 refuse a copied clip file before any AI call.
+4. An automatic Phnom Penh check in stage 4.
+5. **Capstone 2 (the next milestone):**
    - **Learn from the team's fixes:** save them, give known place names to Gemini as hints (so it spells a place the same way for every creator), and measure accuracy on reviewed clips. Until then, the team links different names in 5b.
-   - **Branches:** one place, many branches, linked as one. Each branch keeps its own district and Google Maps link, so the website can show every branch's link to click. (This changes the shape of `places.json` and `final_dataset.json`, so the website team must agree first.)
+   - **Branches:** one place, many branches, linked as one. Each branch keeps its own district and Google Maps link, so the website can show every branch's link to click. (This changes the shape of the place files and `final_dataset.json`, so the website team must agree first.)
    - View and like counts for ranking.
    - Automatic tests on every push.
