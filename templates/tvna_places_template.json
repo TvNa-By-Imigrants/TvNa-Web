@@ -1,9 +1,8 @@
-[
-  {
-    "place_id": null,
-    "place_name": null,
-    "aliases": [],
-    "area": null,
-    "google_maps_url": null
-  }
-]
+{
+  "place_id": null,
+  "place_name": null,
+  "aliases": [],
+  "area": null,
+  "google_maps_url": null,
+  "photos": []
+}

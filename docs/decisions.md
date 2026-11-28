@@ -4,6 +4,22 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-28: Several people can run 5c at once (ids from the Maps link, one file per place)
+
+**Decision:**
+- A new place's id comes from the place code in its Google Maps link: `tvna_p_` + 10 letters and numbers (the start of a SHA-256 of `maps_key()`). The same shop gets the same id on every computer. Old ids (`tvna_p_0001`) stay.
+- A place with no readable Maps link gets no new id: 5c lists it as unclear ("add the Share link" or "run again online"). 5b already asks for the link on every `verified` place.
+- One file per place, `data/places/<place_id>.json` (place_id, place_name, aliases, area, google_maps_url, photos). The first 5c run moves the old `data/results/places.json` into these files and deletes it; git keeps its history. Stage 6 reads the folder.
+- Team rule: each person runs 5c on their own clips, right after `git pull`, and pushes right after.
+
+**Why:** with numbered ids, two people running 5c at once both gave `tvna_p_0005` to two different shops, and everyone edited the same `places.json`. Now ids can't clash, and people working on different places never touch the same file.
+
+**Limits:** two people adding a name to the **same** place at the same moment still get a git conflict in that one small file (keep both names). Two different kinds of Maps link for one shop (a `cid=` link and a place link) can give two ids; 5c then sees the same name and asks (unclear).
+
+**Other options:** a database or a server that hands out ids (we have neither: the data is JSON in git); one person runs all matching (a bottleneck for ~100 clips).
+
+---
+
 ## 2026-11-27: Fixes from a full review of every stage
 
 **Decision:**

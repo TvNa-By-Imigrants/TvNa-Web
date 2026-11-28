@@ -5,7 +5,7 @@ We use **4 kinds of JSON files** (the 5th template, `tvna_clip_place_template.js
 - The full process, stage by stage: [tvna_pipeline_explained.md](tvna_pipeline_explained.md).
 - How the files connect: `docs/tvna_data_model.mmd`.
 - The scripts are in the repo root (`stage1_new_clip.py` … `stage6_build_final_dataset.py`); empty templates are in `templates/`.
-- Where the files are: clip files in `data/clips/`, `areas.json` in `data/reference/`, `places.json` and `final_dataset.json` in `data/results/`.
+- Where the files are: clip files in `data/clips/`, `areas.json` in `data/reference/`, one file per place in `data/places/` (until 2026-11-28 all places were in `data/results/places.json`), `final_dataset.json` in `data/results/`.
 - How to run each stage, and the team review steps: the [README](../README.md).
 
 Missing information is always `null` (never `""`, "N/A" or "Unknown").
@@ -316,7 +316,7 @@ The name only counts when stage 5c **creates** the place in places.json. For a p
 Creators often call one place by different names. Gemini doesn't know the names we already have (planned for Capstone 2), so the team links them in 5b:
 
 1. Copy the Maps link of the **right** place (for a branch, the branch in the video). 5c matches by link first, whatever the names are, so an English name in one clip and a Khmer name in another still match. Check the name, photos and address first: a wrong link joins the clip to the wrong place (if that link is already in places.json) or makes a duplicate place.
-2. Search `data/results/places.json` for the name, the other names and the link. If the place is there, check it is the same shop.
+2. Search `data/places/` for the name, the other names and the link (`grep -il "name" data/places/*.json`). If the place is there, check it is the same shop.
 3. Add every other name said, written or shown in this video to `place_name_alt`. If the video only says the Khmer name but the caption, the sign or Google Maps shows the English one (or the other way round), add that one too. 5c can't match a Khmer name with an English one by letters.
 4. After 5c, decide every unclear place, and check every matched one.
 
@@ -353,13 +353,13 @@ Also unclear: a Maps link or a name shared by two or more places, and the same n
 | Result | What happens | Report group |
 |---|---|---|
 | One place matches | Reuse its `place_id`. New names are added to `aliases`. An empty `area` is filled; a different district is reported (`another district "…", places.json keeps "…"`) | matched |
-| No place matches | New entry in places.json with a new id (`tvna_p_0006`, ...) | new |
+| No place matches | New place file `data/places/<place_id>.json`; the id comes from its Google Maps link (e.g. `tvna_p_3109513dc7`), so it is the same on every computer. No readable Maps link → unclear, no new place | new |
 | Unclear (several places, or only close) | `place_id` stays null. The team writes the suggested id in the clip (same place) or `"new"` (a different place), then runs 5c again | unclear |
 
 - Only `verified` places are matched. `rejected` places are skipped. Every other place is listed as `waiting for review` with its status, and nothing changes for it (not even a `place_id` the team wrote).
 - A place that already has a `place_id` is not matched again. 5c only adds what is new (another name, a district or Maps link the place didn't have) and reports a different district on every run; otherwise it is counted as skipped.
 - Skipped: `rejected` places, places with no name, and places with a `place_id` that add nothing new.
-- A `place_id` that is not in places.json is reported as `unknown_id`.
+- A `place_id` that has no place file is reported as `unknown_id`.
 - The team checks the report. For matched and new places, confirm it is the right place by name, aliases and `google_maps_url`.
 - One alias belongs to one place only.
 - Branches of one shop = one place, with one district in `area` (the first one 5c saw). One district per branch is for Capstone 2.

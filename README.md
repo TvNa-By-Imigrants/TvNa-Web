@@ -37,7 +37,7 @@ Turns **TikTok videos about places in Phnom Penh** into `data/results/final_data
 
 ```
  TikTok links ─► 1 Collect ─► 2 Audio ─► 3 Transcript ─► 4 Places ─► 5b Team review ─► 5c Match ─► 6 Final dataset
- (links.txt)    (duplicates   (TikTok)   (Gemini)        (Gemini)    (people)          (places.json) (website file)
+ (links.txt)    (duplicates   (TikTok)   (Gemini)        (Gemini)    (people)          (data/places/) (website file)
                  removed here)
 ```
 
@@ -51,8 +51,8 @@ Each video is **one clip file**, `data/clips/PP-001.json`. Every stage reads it,
 | **4. Places** | Gemini + code | `stt.transcript` + `source.caption` | in the clip: `fields` (one object per place) and `extraction`; a copy in `data/gemini_answers/PP-NNN.json` |
 | **5a. Duplicates** | script | all clip files | moves a second copy of a video to `data/clips/duplicates/` (safety net; stage 1 already stops most) |
 | **5b. Team review** | **people** | places that are not `verified` yet | fills what is missing, then sets `verification_status` to `verified` or `rejected` |
-| **5c. Match** | script | `verified` places | `fields[].place_id` in the clip; `data/results/places.json` (one entry per real place) |
-| **6. Final dataset** | script | clips + `places.json` + `areas.json` | `data/results/final_dataset.json` (only `verified` places) |
+| **5c. Match** | script | `verified` places | `fields[].place_id` in the clip; one file per real place, `data/places/<place_id>.json` |
+| **6. Final dataset** | script | clips + `data/places/` + `areas.json` | `data/results/final_dataset.json` (only `verified` places) |
 
 Stages 2, 3 and 4 cost time and Gemini tokens, so duplicates are stopped **before** them, in stage 1.
 
@@ -124,12 +124,12 @@ Each file type has an empty template in `templates/`. You never copy them by han
 |---|---|---|---|
 | `tvna_clip_template.json` | one clip file per video, `data/clips/PP-NNN.json` | stage 1 copies it | stages 2, 3, 4 fill it; 5b people fix it; 5c adds `place_id`; 6 reads it |
 | `tvna_clip_place_template.json` | one object in a clip's `fields` list (one per place in the video) | stage 4 | 5b, 5c, 6 |
-| `tvna_places_template.json` | `data/results/places.json`: one entry per **real** place | stage 5c | stage 6 (the website name) |
+| `tvna_places_template.json` | one file per **real** place, `data/places/<place_id>.json` (names, district, Maps link, `photos`) | stage 5c | stage 6 (the website name) |
 | `tvna_areas_template.json` | `data/reference/areas.json`: the 14 districts (fixed, nobody runs it) | the team, once | stages 4, 5c, 6 check districts against it |
 | `tvna_final_dataset_template.json` | `data/results/final_dataset.json`: one record per place, for the website | stage 6 | the website |
 
 ```
-clip file (one per video) ──5c──► places.json (one per real place) ──6──► final_dataset.json (website)
+clip file (one per video) ──5c──► place file (one per real place) ──6──► final_dataset.json (website)
    fields[] = places in it            all names of the place                one record per place
                                           ▲
                               areas.json (districts) is checked by 4, 5c, 6
@@ -147,18 +147,18 @@ PP-005.json  "Beans Barley", also "Beans Bali"        (@motokhiev.bydm) ─┐
 PP-007.json  "Beans Barley", also "Beans and Barley"  (@pengpos)        ─┘                  popularity = 2 creators
 ```
 
-(Real data: two creators, one café, the same Maps link. `places.json` keeps all three names in `aliases`.)
+(Real data: two creators, one café, the same Maps link. Its place file keeps all three names in `aliases`.)
 
 **Where it lives:** the same `place_id` is written in 3 files:
 - the clip: `fields[].place_id` (which shop is this place?)
-- `data/results/places.json`: the shop itself: website name, all other names (`aliases`), districts, Maps link
+- its place file, `data/places/<place_id>.json`: the shop itself: website name, all other names (`aliases`), district, Maps link, photos
 - `data/results/final_dataset.json`: one record per `place_id`
 
 **Who sets it:** only stage 5c, and only for `verified` places. Gemini never does. You type one only when 5c asks (below).
 
-**Before matching:** only `verified` places are matched. `rejected` places are skipped. A place that already has a `place_id` only adds what is new (another name, a district or Maps link the place didn't have) and a note when its district differs; every other status is listed as "waiting for review" and nothing changes. A `place_id` written by the team that isn't in places.json is reported as `unknown_id`.
+**Before matching:** only `verified` places are matched. `rejected` places are skipped. A place that already has a `place_id` only adds what is new (another name, a district or Maps link the place didn't have) and a note when its district differs; every other status is listed as "waiting for review" and nothing changes. A `place_id` written by the team that has no place file is reported as `unknown_id`.
 
-**Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in places.json. Before comparing, names are cleaned: capitals, spaces, punctuation and accents don't matter, `&` = `and`, `ឲ` = `ឱ`.
+**Names compared:** the clip's `place_name` and every `place_name_alt` are compared with each place's `place_name` and every `aliases` entry in the place files. Before comparing, names are cleaned: capitals, spaces, punctuation and accents don't matter, `&` = `and`, `ឲ` = `ឱ`.
 
 **How 5c decides** (each `verified` place, in order; the first check that fits wins):
 
@@ -171,15 +171,24 @@ PP-007.json  "Beans Barley", also "Beans and Barley"  (@pengpos)        ─┘  
 | 2c | Same name, but a **different** Maps link | **unclear**: "another branch, or a different place?" |
 | 3 | Name 95% or more alike with exactly one place (not for Khmer names) | same place; the new spelling is added to `aliases` |
 | 4 | 75–94% alike, one name inside the other (3+ letters), or a close Khmer name | **unclear**: `place_id` stays `null`; 5c suggests up to 3 places |
-| 5 | Anything else | **new** place, `tvna_p_0003`…, named after this clip's `place_name` |
+| 5 | Anything else | **new** place, named after this clip's `place_name`. Its id comes from its Google Maps link (see below). No readable Maps link → **unclear**, no new place |
+
+**New ids come from the Google Maps link,** e.g. `tvna_p_3109513dc7`: 10 letters and numbers made from the place code in the link. So the same shop gets the same id on every computer, and two people can run 5c at the same time without giving one id to two shops. The places made before 2026-11-28 keep their ids (`tvna_p_0001`). The Share link and the long link of one place give the same id.
+
+**One file per place** (`data/places/`), so people matching different places never edit the same file. The first 5c run after 2026-11-28 moves the old `data/results/places.json` into these files and deletes it (git keeps its history).
+
+**Team rule, so 5c runs never clash:**
+1. Each person runs 5c only on **their own clips** (e.g. `data/clips/PP-04*.json`), not on `*.json`.
+2. `git pull` right before 5c, and commit + `git push` right after.
+3. If git still shows a conflict in a place file (two people added a name to the same place at the same time), keep both sides: every name in `aliases`.
 
 Every name that gets a `place_id` is added to that place's `aliases`, so next time it matches exactly. That's why "Beans Bali" (PP-005's other name) and "Beans and Barley" (PP-007's) are both in `aliases` now: a future video with either spelling matches at once.
 
 **What you do:**
 - **Unclear:** write the suggested id in the clip's `place_id` if it's the same shop, or `"new"` if it's a different one. Run 5c again.
-- **Wrong match** (two different shops got one id): in the clip, write `"new"` (or the right id) in `place_id`, **and** in `data/results/places.json` remove the wrong name from the old place's `aliases`. If you skip the second part, the next video with that name comes out "unclear" (checked: `candidates tvna_p_0001, tvna_p_0003`).
-- **Change the website name:** edit `place_name` in `data/results/places.json`. Keep the old name in `aliases`.
-- **Fix a district or Maps link after 5c:** edit `data/results/places.json`. 5c fills a district only when places.json has none; a different one is only reported (`another district "…", places.json keeps "…"`).
+- **Wrong match** (two different shops got one id): in the clip, write `"new"` (or the right id) in `place_id`, **and** in the old place's file (`data/places/<place_id>.json`) remove the wrong name from `aliases`. If you skip the second part, the next video with that name comes out "unclear" (checked: `candidates tvna_p_0001, tvna_p_…`).
+- **Change the website name:** edit `place_name` in the place's file. Keep the old name in `aliases`.
+- **Fix a district or Maps link after 5c:** edit the place's file. 5c fills a district only when the file has none; a different one is only reported (`another district "…", the place file keeps "…"`).
 - **Branches** of one shop are one place, with **one** district in `area` (the first one; another branch's district is only reported). Same name but a different Maps link → 5c says **unclear** ("another branch or a different place?"): write the existing id for a branch, `"new"` for a different shop. **Limit:** the place keeps only its **first** Maps link, and the website file shows only **one** district (the first); other branches' links stay only in their clips (Capstone 2: one district and link per branch).
 
 ---
@@ -196,14 +205,13 @@ _Last updated: 2026-11-28_
 | 4. Places (transcript + caption, prompt v5) | `stage4_extract_places.py` | ✅ (Phnom Penh check planned) |
 | 5a. Duplicates safety net | `stage5a_dedupe_clips.py` | ✅ |
 | 5b. Team review | by hand, checked by `stage5b_validate_clips.py` | ✅ |
-| 5c. Match places | `stage5c_match_places.py` | ✅ |
+| 5c. Match places (ids from the Maps link, one file per place, several people at once) | `stage5c_match_places.py` | ✅ |
 | 6. Final dataset | `stage6_build_final_dataset.py` | ✅ |
 
 **Coming next, in order (the photo plan):**
-1. 5c: place ids from the Google Maps place code, one file per place (`data/places/`), so several people can match at once
-2. 5d: 1–5 photos for each new place (Cloudinary)
-3. Stage 6 publishes the photos and each video's cover
-4. Docs for the new flow, then the review page for the team
+1. 5d: 1–5 photos for each new place (Cloudinary)
+2. Stage 6 publishes the photos and each video's cover
+3. Docs for the new flow, then the review page for the team
 
 Later: stages 2–4 refuse a clip file that is a copy of another clip; the Phnom Penh check in stage 4.
 
@@ -265,8 +273,10 @@ python stage4_extract_places.py data/clips/PP-005.json data/clips/PP-006.json   
 python stage5a_dedupe_clips.py data/clips/*.json           # 5a. safety net
 # 5b. team review, by hand (see Stage 5b), then check it:
 python stage5b_validate_clips.py data/clips/*.json         # 5b. check the review (changes nothing)
-python stage5c_match_places.py data/clips/*.json           # 5c.
-python stage6_build_final_dataset.py data/clips/*.json     # 6.
+git pull                                                   # 5c. right before matching
+python stage5c_match_places.py data/clips/PP-04*.json      # 5c. your own clips only
+git add data/places data/clips && git commit -m "Match my clips" && git push   # 5c. right after
+python stage6_build_final_dataset.py data/clips/*.json     # 6. all clips
 ```
 
 - Every command prints the next one. Copy it.
@@ -291,8 +301,8 @@ python stage4_extract_places.py $T/clips/PP-001.json --answers-dir $T/answers
 python stage5a_dedupe_clips.py $T/clips/*.json
 # 5b: open $T/clips/PP-001.json and review the place (see Stage 5b); set "verification_status": "verified"
 python stage5b_validate_clips.py $T/clips/*.json
-python stage5c_match_places.py $T/clips/*.json --places $T/places.json
-python stage6_build_final_dataset.py $T/clips/*.json --places $T/places.json --output $T/final_dataset.json
+python stage5c_match_places.py $T/clips/*.json --places-dir $T/places
+python stage6_build_final_dataset.py $T/clips/*.json --places-dir $T/places --output $T/final_dataset.json
 ```
 
 - Stages 2–4 really call TikTok and Gemini (a few free-tier calls per video). Stages 1, 5a, 5b, 5c and 6 cost nothing.
@@ -308,7 +318,7 @@ python stage6_build_final_dataset.py $T/clips/*.json --places $T/places.json --o
 | 3 | the same file | `stt.transcript` matches what is said |
 | 4 | the same file | `fields`: one object per place, with `verification_status`, `missing_fields`, `flags` |
 | 5b | (you edit it) | `cleaned_by` = your name, `"verified"` |
-| 5c | `$T/places.json`, and the clip | a new `tvna_p_0001`; the clip's `place_id` is now `tvna_p_0001` |
+| 5c | `$T/places/`, and the clip | a new place file, e.g. `tvna_p_3109513dc7.json`; the clip's `place_id` is that id |
 | 6 | `$T/final_dataset.json` | one record with your place, `popularity: 1` |
 
 **Then try these:**
@@ -341,8 +351,8 @@ TvNa-Web/
 │   │   └── duplicates/           ← second copies of a video (still count as "already collected")
 │   ├── audio/                    ← WAVs from stage 2 (not in git)
 │   ├── gemini_answers/           ← Gemini's first answer from stage 4 (never edit)
-│   └── results/                  ← made by the scripts
-│       ├── places.json           ← made by 5c (one entry per real place; the team may edit names here)
+│   ├── places/                   ← made by 5c: one file per real place, tvna_p_….json (the team may edit names here)
+│   └── results/
 │       └── final_dataset.json    ← made by 6 (the website reads this)
 ├── templates/                    ← empty JSON templates
 ├── docs/                         ← field guide, decisions, diagrams
@@ -355,7 +365,7 @@ There is no database: these JSON files in git **are** the data. `git pull` gives
 - **Bad link, or a duplicate in stage 1:** no file is made at all.
 - **Duplicate found later (5a):** the copy moves to `data/clips/duplicates/`.
 - **Everything else stays in `data/clips/`.** The status is written **inside** the file, per place (`rejected`, `needs_review`, `auto_added`, `verified`), because one video can have several places with different statuses. A stage that fails leaves the clip unchanged.
-- Nothing is ever deleted. Only `verified` places reach `places.json` and `final_dataset.json`.
+- Nothing is ever deleted (except the old `data/results/places.json`, moved once into `data/places/`). Only `verified` places reach `data/places/` and `final_dataset.json`.
 - Full table, case by case: [docs/tvna_pipeline_explained.md, section 7](docs/tvna_pipeline_explained.md#7-folders-and-where-a-file-goes-when-a-condition-is-not-met).
 
 ---
@@ -561,8 +571,8 @@ Next: python stage5c_match_places.py data/clips/*.json
 6. **Status:** `"verified"` (correct, goes to the website) or `"rejected"` (not a place, not in Phnom Penh, or wrong).
 
 **Same place, other names.** Creators often call one place by different names (English or Khmer, other spellings). Gemini doesn't know the names we already have (planned for Capstone 2), so **you** link them:
-- **The Maps link links the names.** 5c checks the Google Maps link first. Copy the Share link of the **right** place (for a branch, the branch in the video), and two creators' names for it match even if they look nothing alike, e.g. an English name in one clip and a Khmer name in another. Check the name, photos and address on Maps before you copy: a wrong link joins the clip to the wrong place (if that link is already in places.json) or makes a second, duplicate place.
-- **Is it already in `data/results/places.json`?** Search it for the name, the other names and the link, e.g. `grep -i "hanjan" data/results/places.json`. If it's there, check it is the same shop.
+- **The Maps link links the names.** 5c checks the Google Maps link first. Copy the Share link of the **right** place (for a branch, the branch in the video), and two creators' names for it match even if they look nothing alike, e.g. an English name in one clip and a Khmer name in another. Check the name, photos and address on Maps before you copy: a wrong link joins the clip to the wrong place (if that link is already in a place file) or makes a second, duplicate place. A `verified` place needs its link: without one, 5c can't give it a `place_id`.
+- **Is it already in `data/places/`?** Search it for the name, the other names and the link, e.g. `grep -il "hanjan" data/places/*.json`. If it's there, check it is the same shop.
 - **Keep every other name.** Add each name said, written or shown in this video (Khmer name, English name, the sign, another spelling) to `place_name_alt`. If the video only says the Khmer name but the caption, the sign or Google Maps shows the English one (or the other way round), add that one too. 5c can't match a Khmer name with an English one by letters, so these names and the Maps link are the only way they connect.
 - **After 5c:** decide every **unclear** place, and check that each **matched** place really is the same shop (see "What you do" in Stage 5c).
 
@@ -591,33 +601,34 @@ Example, PP-002: `missing_fields: ["area"]` → find "Hanjan Coffee" on Maps →
 
 ## Stage 5c: match places
 
-**In:** `verified` places. **Out:** a `place_id` for each, and `data/results/places.json` (one entry per real place, with all its names in `aliases`).
+**In:** `verified` places, **your own clips** (team rule in [How `place_id` works](#how-place_id-works)). **Out:** a `place_id` for each, and one file per real place in `data/places/`, with all its names in `aliases`.
 
 So two clips about the same café count as **one place**. How it decides, and what to do with **unclear** or a **wrong match**: [How `place_id` works](#how-place_id-works).
 
 ```
 new (1):
-  PP-003.json  "Luv selfie booth" -> tvna_p_0001
+  PP-003.json  "Luv selfie booth" -> tvna_p_…
 waiting for review (1):
   PP-002.json  "Hanjan Coffee" (verification_status "needs_review")
 ```
 
 - **Waiting for review:** not checked in 5b yet. Nothing changes for it.
-- When a clip calls a known place something else, 5c says `website name stays "…"` (the name in places.json).
+- When a clip calls a known place something else, 5c says `website name stays "…"` (the name in its place file).
+- **Unclear, "no Google Maps link":** add the place's Share link in 5b, then run 5c again. **"can't read its Google Maps link":** run again online, or fix the link.
 
 ---
 
 ## Stage 6: final dataset
 
-**In:** clips + `places.json` + `areas.json`. **Out:** `data/results/final_dataset.json`, one record per place:
+**In:** clips + `data/places/` + `areas.json`. **Out:** `data/results/final_dataset.json`, one record per place:
 
-- **one name** (`place_name` from places.json); other names never reach the website
-- **one district** in `area` (text, or `null`): the one in places.json, else the first one from the clips. Clips naming other districts → a warning (one district per branch: Capstone 2)
+- **one name** (`place_name` from the place file); other names never reach the website
+- **one district** in `area` (text, or `null`): the one in the place file, else the first one from the clips. Clips naming other districts → a warning (one district per branch: Capstone 2)
 - `category`, `price_range`, `opening_hours`, `menu_items`: every different value from all clips
 - `mentions`: one per clip (`clip_id`, `creator`, `speaker_opinion`)
 - `popularity`: number of different creators who posted about it
 
-Only `verified` places with a `place_id` are published. It warns about the rest, when clips disagree (e.g. two price ranges), and about a value that isn't text (a number typed by hand is published as text, e.g. `"5"`). It rebuilds the file from scratch each time. No `places.json` yet → it says to run 5c first.
+Only `verified` places with a `place_id` are published. It warns about the rest, when clips disagree (e.g. two price ranges), and about a value that isn't text (a number typed by hand is published as text, e.g. `"5"`). It rebuilds the file from scratch each time. No place files in `data/places/` yet → it says to run 5c first.
 
 > **Website team:** since 2026-11-18 the file is at **`data/results/final_dataset.json`** (it was `data/final_dataset.json`). It has **no `place_name_alt`** (since 2026-11-17). Use `place_name`. `area` is **one district as text** (e.g. `"Chamkar Mon"`) or `null`, not a list, in every file (since 2026-11-18). Fields: `templates/tvna_final_dataset_template.json`.
 

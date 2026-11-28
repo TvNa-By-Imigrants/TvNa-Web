@@ -1,6 +1,7 @@
 """Shared helpers for the TVNA pipeline scripts (see docs/tvna_field_guide.md)."""
 import base64
 import difflib
+import hashlib
 import http.client
 import importlib
 import json
@@ -26,7 +27,8 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 REFERENCE_DIR = DATA_DIR / "reference"  # fixed lists, set once
 RESULTS_DIR = DATA_DIR / "results"  # made by stages 5c and 6
 AREAS_FILE = REFERENCE_DIR / "areas.json"
-PLACES_FILE = RESULTS_DIR / "places.json"
+PLACES_DIR = DATA_DIR / "places"  # one file per place, <place_id>.json, made by stage 5c
+OLD_PLACES_FILE = RESULTS_DIR / "places.json"  # before 2026-11-28 all places were in this one file
 FINAL_DATASET_FILE = RESULTS_DIR / "final_dataset.json"
 CLIPS_DIR = DATA_DIR / "clips"
 AUDIO_DIR = DATA_DIR / "audio"
@@ -76,9 +78,17 @@ def load_json(path):
 
 
 def save_json(path, data) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    """Write to a temporary file first, then swap it in, so a stopped run never leaves half a file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + ".part")
+    try:
+        with open(part, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(part, path)
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
 
 
 def display_path(path) -> str:
@@ -259,6 +269,35 @@ def name_key(name: Optional[str]) -> str:
 def name_score(a: Optional[str], b: Optional[str]) -> int:
     """How alike two place names are, 0-100 (100 = the same after name_key). Rounded down, so 94.7 is not a 95."""
     return int(difflib.SequenceMatcher(None, name_key(a), name_key(b)).ratio() * 100)
+
+
+PLACE_ID_PREFIX = "tvna_p_"
+PLACE_ID = re.compile(r"tvna_p_[0-9a-z]+")
+
+
+def place_id_from_maps(code: str) -> str:
+    """A new place's id from its Google Maps place code (maps_key): the same shop gets the same id on every computer."""
+    return PLACE_ID_PREFIX + hashlib.sha256(code.encode()).hexdigest()[:10]
+
+
+def place_file(folder, place_id: str) -> Path:
+    return Path(folder) / f"{place_id}.json"
+
+
+def load_places(folder) -> List[dict]:
+    """Every place file in the folder (none yet -> []). Raises ValueError naming the file that is wrong."""
+    places = []
+    for path in sorted(Path(folder).glob("*.json")):
+        if not PLACE_ID.fullmatch(path.stem):
+            raise ValueError(f"{display_path(path)}: a place file is named after its place_id, e.g. tvna_p_0001.json")
+        try:
+            place = load_json(path)
+        except (OSError, ValueError) as e:
+            raise ValueError(f"{display_path(path)}: {e}") from None
+        if not isinstance(place, dict) or place.get("place_id") != path.stem:
+            raise ValueError(f"{display_path(path)}: its place_id must be the file name ({path.stem})")
+        places.append(place)
+    return places
 
 
 def has_khmer(text: Optional[str]) -> bool:

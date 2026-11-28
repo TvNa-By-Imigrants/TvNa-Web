@@ -15,7 +15,7 @@ import stage6_build_final_dataset as s6  # noqa: E402
 WORK = Path(tempfile.mkdtemp(prefix="tvna-test-"))
 CLIPS = WORK / "clips"
 CLIPS.mkdir(parents=True)
-PLACES, OUT = WORK / "places.json", WORK / "final_dataset.json"
+PLACES, OUT = WORK / "places", WORK / "final_dataset.json"
 MISSING = object()
 
 results = []
@@ -28,6 +28,13 @@ def load(p):
 
 def write(p, data):
     Path(p).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def write_places(entries):
+    """One file per place, as stage 5c makes them; old files are removed first."""
+    shutil.rmtree(PLACES, ignore_errors=True)
+    PLACES.mkdir()
+    for e in entries:
+        write(PLACES / f"{e['place_id']}.json", e)
 
 def drop_missing(d):
     return {k: v for k, v in d.items() if v is not MISSING}
@@ -51,7 +58,7 @@ def clip(name, places, creator="@tester", fields_value=MISSING, source=MISSING):
 
 def run():
     sys.argv = ["stage6_build_final_dataset.py", *sorted(map(str, CLIPS.glob("*.json"))),
-                "--places", str(PLACES), "--output", str(OUT)]
+                "--places-dir", str(PLACES), "--output", str(OUT)]
     out, code = io.StringIO(), 0
     with contextlib.redirect_stdout(out):
         try:
@@ -67,7 +74,7 @@ def run():
             out.write(traceback.format_exc())
     return code, out.getvalue()
 
-write(PLACES, [
+write_places([
     {"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "aliases": ["Tea Kingdom", "ធីឃីងដម"],
      "area": ["Tuol Kouk"], "google_maps_url": "https://maps.app.goo.gl/abc123"},
     {"place_id": "tvna_p_0002", "place_name": "Brown Coffee", "aliases": None, "area": None, "google_maps_url": ""},
@@ -98,7 +105,7 @@ data = load(OUT) if OUT.exists() else []
 rec = {r["place_id"]: r for r in data}
 check("2 only places with a known place_id, not rejected", sorted(rec) == ["tvna_p_0001", "tvna_p_0002", "tvna_p_0003"],
       sorted(rec))
-check("3 unknown place_id is a warning", "tvna_p_9999 is not in places.json" in out, out)
+check("3 unknown place_id is a warning", "tvna_p_9999 has no place file, so not published" in out, out)
 
 text = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
 check('4 no "" in the output: empty values are null', '""' not in text, text)
@@ -133,14 +140,14 @@ check("D2 every record has exactly the template's keys, in the same order",
       (list(template), [list(r) for r in data]))
 
 raw_out = OUT.read_bytes() if OUT.exists() else b""
-raw_in = {p: p.read_bytes() for p in [PLACES, *CLIPS.glob("*.json")]}
+raw_in = {p: p.read_bytes() for p in [*PLACES.glob("*.json"), *CLIPS.glob("*.json")]}
 code2, out2 = run()
 check("R 2nd run: same output byte for byte, no clip or places.json changed",
       code2 == 0 and OUT.read_bytes() == raw_out and all(p.read_bytes() == b for p, b in raw_in.items()), out2)
 check("R 2nd run: same report", out2 == out, (out, out2))
 
 # S. hand-edited values
-write(PLACES, [{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "aliases": ["", None, "Tea Kingdom", "TK"],
+write_places([{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "aliases": ["", None, "Tea Kingdom", "TK"],
                 "area": [], "google_maps_url": None},
                {"place_id": "tvna_p_0002", "place_name": "Brown Coffee", "aliases": "Brown", "area": []}])
 for f in CLIPS.glob("*.json"):
@@ -170,7 +177,7 @@ for f in CLIPS.glob("*.json"):
 names = {"tvna_p_0001": " Tea Kingdom ", "tvna_p_0002": None, "tvna_p_0003": "", "tvna_p_0004": MISSING,
          "tvna_p_0005": ["Wat Botum Park"], "tvna_p_0006": 5}
 nameless = ("tvna_p_0002", "tvna_p_0003", "tvna_p_0004", "tvna_p_0005", "tvna_p_0006")
-write(PLACES, [drop_missing({"place_id": i, "place_name": n, "aliases": ["Old Name"], "area": []}) for i, n in names.items()])
+write_places([drop_missing({"place_id": i, "place_name": n, "aliases": ["Old Name"], "area": []}) for i, n in names.items()])
 clip("PP-201", [place(place_id=i) for i in names])
 code, out = run()
 rec = {r["place_id"]: r for r in load(OUT)} if OUT.exists() else {}
@@ -178,7 +185,7 @@ check("N1 place_name with spaces is trimmed",
       code == 0 and rec.get("tvna_p_0001", {}).get("place_name") == "Tea Kingdom", (code, out, rec))
 check('N2 place_name null / "" / missing / a list / a number: no crash, null (not an alias), warned',
       code == 0 and all(i in rec and rec[i]["place_name"] is None for i in nameless)
-      and all(f"{i}: no place_name in places.json" in out for i in nameless)
+      and all(f"{i}: no place_name in its place file" in out for i in nameless)
       and "Old Name" not in OUT.read_text(encoding="utf-8") and "tvna_p_0001: no place_name" not in out, (out, rec))
 raw_out = OUT.read_bytes()
 code2, out2 = run()
@@ -187,7 +194,7 @@ check("N3 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == r
 # W. spaces-only text, repeated opinions, a name the team checked that differs from places.json
 for f in CLIPS.glob("*.json"):
     f.unlink()
-write(PLACES, [{"place_id": "tvna_p_0001", "place_name": "Luv selfie booth", "aliases": ["ALWAYS selfie booth"],
+write_places([{"place_id": "tvna_p_0001", "place_name": "Luv selfie booth", "aliases": ["ALWAYS selfie booth"],
                 "area": [], "google_maps_url": "   "},
                {"place_id": "tvna_p_0002", "place_name": "Brown Coffee", "area": [], "google_maps_url": 7}])
 clip("PP-301", [place(place_id="tvna_p_0001", speaker_opinion="Good tea"),
@@ -222,7 +229,7 @@ check("W6 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == r
 # V. only places the team approved (verified) are published
 for f in CLIPS.glob("*.json"):
     f.unlink()
-write(PLACES, [{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "aliases": [], "area": []}])
+write_places([{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "aliases": [], "area": []}])
 clip("PP-501", [place(place_id="tvna_p_0001", speaker_opinion="Checked")], creator="@ok")
 for i, status in enumerate(["needs_review", "auto_added", None, "", MISSING, "Verified"], start=2):
     clip(f"PP-50{i}", [place(place_id="tvna_p_0001", verification_status=status, speaker_opinion="Not checked")],
@@ -258,7 +265,7 @@ check("V5 no creator warning for a clip with nothing published; a rejected place
 # A. area: one district per place (branches: next milestone)
 for f in CLIPS.glob("*.json"):
     f.unlink()
-write(PLACES, [drop_missing(e) for e in [
+write_places([drop_missing(e) for e in [
     {"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "area": "Chamkar Mon"},
     {"place_id": "tvna_p_0002", "place_name": "Brown Coffee", "area": []},
     {"place_id": "tvna_p_0003", "place_name": "Luv selfie booth", "area": None},
@@ -303,7 +310,7 @@ check("A5 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == r
 # B. values typed by hand that are not text: never lost or joined without a word
 for f in CLIPS.glob("*.json"):
     f.unlink()
-write(PLACES, [{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "area": "Chamkar Mon"}])
+write_places([{"place_id": "tvna_p_0001", "place_name": "Tea Kingdom", "area": "Chamkar Mon"}])
 clip("PP-801", [place(place_id="tvna_p_0001", price_range=5, menu_items=["milk tea", 2, True, {"x": 1}])])
 clip("PP-802", [place(place_id="tvna_p_0001", price_range=10, opening_hours=7.5)], creator="@other")
 code, out = run()
@@ -321,23 +328,35 @@ raw_out = OUT.read_bytes()
 code2, out2 = run()
 check("B5 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
 
-# C. places.json missing or broken: a clear message, not a Python error
-PLACES.unlink()
+# C. place files missing or broken: a clear message, not a Python error
+shutil.rmtree(PLACES)
 code, out = run()
-check("C1 no places.json: says run stage 5c first, exit 1, output not written again",
-      code == 1 and "not found. Run stage 5c first" in out and "Traceback" not in out and OUT.read_bytes() == raw_out, out)
-PLACES.write_text("[{\"place_id\": \"tvna_p_0001\",}]", encoding="utf-8")
-code, out = run()
-check("C2 broken places.json: can't read it, exit 1, nothing changed",
-      code == 1 and "Can't read" in out and "Nothing changed" in out and OUT.read_bytes() == raw_out, out)
-PLACES.unlink()
+check("C1 no places folder: says run stage 5c first, exit 1, output not written again",
+      code == 1 and "No place files in" in out and "Run stage 5c first" in out and "Traceback" not in out
+      and OUT.read_bytes() == raw_out, out)
 PLACES.mkdir()
 code, out = run()
-check("C4 places.json is a folder: clear message, no crash", code == 1 and "Can't read" in out and "Traceback" not in out, out)
-PLACES.rmdir()
-write(PLACES, [{"place_name": "no id"}])
+check("C1b empty places folder: says run stage 5c first", code == 1 and "No place files in" in out, out)
+(PLACES / "tvna_p_0001.json").write_text('{"place_id": "tvna_p_0001",}', encoding="utf-8")
 code, out = run()
-check("C3 places.json entry without place_id: clear message, no crash", code == 1 and "Can't read" in out, out)
+check("C2 broken place file: names the file, exit 1, nothing changed",
+      code == 1 and "Can't read" in out and "tvna_p_0001.json" in out and "Nothing changed" in out
+      and OUT.read_bytes() == raw_out, out)
+write_places([])
+(PLACES / "tvna_p_0001.json").mkdir()
+code, out = run()
+check("C4 a place file that is a folder: clear message, no crash", code == 1 and "Can't read" in out and "Traceback" not in out, out)
+write_places([])
+write(PLACES / "tvna_p_0001.json", {"place_name": "no id"})
+code, out = run()
+check("C3 place file without place_id: says it must be the file name", code == 1
+      and "its place_id must be the file name (tvna_p_0001)" in out, out)
+write(PLACES / "tvna_p_0001.json", {"place_id": "tvna_p_0002", "place_name": "Tea Kingdom"})
+code, out = run()
+check("C5 place file whose place_id differs from its name: refused", code == 1 and "must be the file name" in out, out)
+write(PLACES / "tvna_p_0001.json", ["not", "a", "place"])
+code, out = run()
+check("C6 place file that is a list: refused, no crash", code == 1 and "must be the file name" in out and "Traceback" not in out, out)
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

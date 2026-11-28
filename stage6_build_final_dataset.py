@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Stage 6: build the final dataset for the website, one record per place.
-Joins the clip files to places.json by place_id. Run after stage5c_match_places.py.
+Joins the clip files to the place files (data/places/<place_id>.json) by place_id. Run after stage5c_match_places.py.
 Values that can differ between clips (category, price_range, opening_hours,
 area_description, menu_items) are kept as lists of unique values. area is one district: the
-first one in places.json, else the first one from the clips (one district per branch: Capstone 2). An empty Maps link, opinion or
+first one in the place file, else the first one from the clips (one district per branch: Capstone 2). An empty Maps link, opinion or
 creator ("", or only spaces) is written as null. Only places the team approved ("verified") are published.
-Each place gets one name, place_name from places.json; other names
+Each place gets one name, place_name from the place file; other names
 (aliases, place_name_alt) stay in the pipeline for matching and are not published.
 
 Usage:
@@ -19,11 +19,13 @@ from pathlib import Path
 from tvna_common import (
     AREAS_FILE,
     FINAL_DATASET_FILE,
-    PLACES_FILE,
+    PLACES_DIR,
+    display_path,
     is_rejected,
     is_verified,
     load_areas,
     load_json,
+    load_places,
     match_districts,
     norm,
     save_json,
@@ -70,17 +72,18 @@ def new_record(place):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("clips", nargs="+", help="Clip JSON files")
-    ap.add_argument("--places", default=PLACES_FILE)
+    ap.add_argument("--places-dir", type=Path, default=PLACES_DIR)
     ap.add_argument("--areas", default=AREAS_FILE)
     ap.add_argument("--output", default=FINAL_DATASET_FILE)
     args = ap.parse_args()
 
     try:
-        places = {e["place_id"]: e for e in load_json(args.places)}
-    except FileNotFoundError:
-        sys.exit(f"{args.places} not found. Run stage 5c first: python stage5c_match_places.py data/clips/*.json")
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        sys.exit(f"Can't read {args.places} ({type(e).__name__}: {e}). Fix it or run stage 5c again. Nothing changed.")
+        places = {e["place_id"]: e for e in load_places(args.places_dir)}
+    except ValueError as e:
+        sys.exit(f"Can't read {e}. Fix it (or get it again with git pull). Nothing changed.")
+    if not places:
+        sys.exit(f"No place files in {display_path(args.places_dir)}/. Run stage 5c first: "
+                 "python stage5c_match_places.py data/clips/*.json")
     areas = load_areas(args.areas)
     records, warnings = {}, []
     no_place_id = 0
@@ -110,7 +113,7 @@ def main():
                 warn(f"{label}: verification_status {status}, not verified by the team, left out")
                 continue
             if place_id not in places:
-                warn(f"{label}: {place_id} is not in places.json")
+                warn(f"{label}: {place_id} has no place file, so not published. Run stage 5c (or git pull)")
                 continue
             if place_id not in records:
                 records[place_id] = new_record(places[place_id])
@@ -144,7 +147,7 @@ def main():
              "Stage 5c lists them (waiting for review, or unclear)")
     for rec in records.values():
         if not rec["place_name"]:
-            warnings.append(f"{rec['place_id']}: no place_name in places.json, so the website shows no name")
+            warnings.append(f"{rec['place_id']}: no place_name in its place file, so the website shows no name")
         rec["popularity"] = len({norm(m["creator"]) for m in rec["mentions"] if m["creator"]})
         districts, not_districts = match_districts(rec["area"], areas)
         for value in not_districts:
