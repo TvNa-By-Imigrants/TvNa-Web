@@ -46,7 +46,7 @@ Each video is **one clip file**, `data/clips/PP-001.json`. Every stage reads it,
 | Stage | Who | Reads | Writes |
 |---|---|---|---|
 | **1. Collect** | script | TikTok link(s) | a **new clip file** `data/clips/PP-NNN.json` with `clip_id` and `source` (link, video id, creator, date). A video we already have gets **no** file |
-| **2. Audio** | script (TikTok) | `source.url` | `data/audio/PP-NNN.wav`; in the clip: `audio_file`, `source.caption`, `source.posted_at` |
+| **2. Audio** | script (TikTok, Cloudinary) | `source.url` | `data/audio/PP-NNN.wav`; in the clip: `audio_file`, `source.caption`, `source.cover_url`, `source.posted_at` |
 | **3. Transcript** | Gemini | the WAV | in the clip: `stt` (the transcript, Khmer + English) |
 | **4. Places** | Gemini + code | `stt.transcript` + `source.caption` | in the clip: `fields` (one object per place) and `extraction`; a copy in `data/gemini_answers/PP-NNN.json` |
 | **5a. Duplicates** | script | all clip files | moves a second copy of a video to `data/clips/duplicates/` (safety net; stage 1 already stops most) |
@@ -65,7 +65,7 @@ One real clip, PP-002. Each stage adds these parts (everything else stays `null`
 | After stage | New in the clip file |
 |---|---|
 | 1 | `clip_id: "PP-002"`, `source.url`, `source.video_id`, `source.platform`, `source.creator`, `source.collected_at` |
-| 2 | `audio_file`, `source.caption` ("…dope Tteobokki… 🛵Hanjan Coffee"), `source.posted_at` |
+| 2 | `audio_file`, `source.caption` ("…dope Tteobokki… 🛵Hanjan Coffee"), `source.cover_url` (the video's cover picture on Cloudinary), `source.posted_at` |
 | 3 | `stt.transcript` (30 lines), `stt.model` |
 | 4 | `extraction` (model, `prompt_version: "v5"`) and `fields`: one place, below |
 | 5b | the team fills `area`, `google_maps_url`, `cleaned_by`, sets `verification_status: "verified"` |
@@ -186,12 +186,12 @@ Every name that gets a `place_id` is added to that place's `aliases`, so next ti
 
 ## Where we are now
 
-_Last updated: 2026-11-27_
+_Last updated: 2026-11-28_
 
 | Stage | Script | Status |
 |---|---|---|
 | 1. Collect (one link or a list, duplicates removed) | `stage1_new_clip.py` | ✅ |
-| 2. Audio + caption | `stage2_get_audio.py` | ✅ |
+| 2. Audio + caption + cover picture | `stage2_get_audio.py` | ✅ (cover: new, waiting for the Cloudinary keys) |
 | 3. Transcript | `stage3_transcribe.py` | ✅ |
 | 4. Places (transcript + caption, prompt v5) | `stage4_extract_places.py` | ✅ (Phnom Penh check planned) |
 | 5a. Duplicates safety net | `stage5a_dedupe_clips.py` | ✅ |
@@ -199,9 +199,13 @@ _Last updated: 2026-11-27_
 | 5c. Match places | `stage5c_match_places.py` | ✅ |
 | 6. Final dataset | `stage6_build_final_dataset.py` | ✅ |
 
-**Coming next, in order:**
-1. Stages 2–4 refuse a clip file that is a copy of another clip (no TikTok or Gemini call)
-2. The Phnom Penh check in stage 4
+**Coming next, in order (the photo plan):**
+1. 5c: place ids from the Google Maps place code, one file per place (`data/places/`), so several people can match at once
+2. 5d: 1–5 photos for each new place (Cloudinary)
+3. Stage 6 publishes the photos and each video's cover
+4. Docs for the new flow, then the review page for the team
+
+Later: stages 2–4 refuse a clip file that is a copy of another clip; the Phnom Penh check in stage 4.
 
 **Capstone 2 (the next milestone; noted, not built):**
 - **The improvement loop:** save the team's fixes, give the known place names to Gemini as hints (so it spells a place the same way for every creator), and a test score. Done already: keep Gemini's first answer, use the TikTok caption. Until then, the team links the different names in 5b (see "Same place, other names").
@@ -225,7 +229,9 @@ python3.12 -m venv .venv
 cp .env.example .env
 ```
 
-Open `.env` and add your Gemini API key after `GEMINI_API_KEY=` (from aistudio.google.com). **Never commit `.env`.**
+Open `.env` and add your keys. **Never commit `.env`.**
+- `GEMINI_API_KEY=`: from aistudio.google.com.
+- `CLOUDINARY_CLOUD_NAME=`, `CLOUDINARY_API_KEY=`, `CLOUDINARY_API_SECRET=`: from the team's Cloudinary account (ask the team lead). Stage 2 uses them to save each video's cover picture. Without them stage 2 still makes the audio and says the cover was not saved.
 
 **Every time you open a terminal:**
 
@@ -401,23 +407,29 @@ One link also works: `python stage1_new_clip.py "<link>"` (add `--posted-at 2026
 
 ## Stage 2: get the audio
 
-**In:** `source.url`. **Out:** `data/audio/PP-002.wav` (16 kHz mono), `source.caption`, `source.posted_at`.
+**In:** `source.url`. **Out:** `data/audio/PP-002.wav` (16 kHz mono), `source.caption`, `source.cover_url`, `source.posted_at`.
 
 ```
 PP-002: saved data/audio/PP-002.wav (16 kHz, mono, 73.3 s)
   caption: This yet-to-discover restaurant, has such a dope Tteobokki.  …
   posted_at: 2026-11-11 (from TikTok)
+  cover: https://res.cloudinary.com/<cloud name>/image/upload/v…/tvna/covers/PP-002.jpg
 Next: python stage3_transcribe.py data/clips/PP-002.json
 ```
 
 - WAVs are not in git. For a teammate's clip, run stage 2 on it.
 - No caption on the video → `source.caption` is `null`.
-- A clip with a WAV but no caption gets the caption only (no download).
+- **Cover picture:** the video's TikTok cover, made a 720 px wide JPG (no hidden photo data such as GPS) and put on Cloudinary as `tvna/covers/PP-NNN`. The website shows it next to the creator's mention.
+- `source.cover_url`: a link = done; `null` = TikTok has no cover; `""` or missing = not saved yet, the next run tries again.
+- A clip with a WAV but no caption or no cover gets only those (no video download).
+- A cover that can't be saved (no Cloudinary keys, no internet) doesn't stop stage 2: the audio is still made, and the message says why.
 
 | Try this | You should see |
 |---|---|
 | The same command again | `already has audio … Skipped.` |
 | A deleted or private video | `Download failed: …` then `Nothing changed` |
+| No Cloudinary keys in `.env` | the WAV is made, then `cover: not saved, the Cloudinary keys are not in .env` |
+| Old clips (PP-002 to PP-007) after adding the keys | `reading the cover from TikTok (no download)`, then `cover: https://…` |
 
 ---
 

@@ -36,6 +36,7 @@ from tvna_common import (
     display_path,
     gemini_client,
     generate_with_backup,
+    has_khmer,
     has_places,
     load_areas,
     load_json,
@@ -228,6 +229,8 @@ def already_said(text: Optional[str], words: str) -> bool:
     def clean(t):
         return " ".join(unicodedata.normalize("NFC", t or "").lower().split())
     found = clean(words)
+    if has_khmer(found):  # Khmer has no spaces between words, so there are no word edges to check
+        return bool(found) and found in clean(text)
     return bool(found) and re.search(rf"(?<!\w){re.escape(found)}(?!\w)", clean(text)) is not None
 
 
@@ -242,6 +245,19 @@ def add_new_names(description: Optional[str], names: List[str], prefix: str = ""
     """Add the names (districts, neighborhoods) that area_description doesn't say yet, each checked on its own."""
     new = [n for n in names if not already_said(description, n)]
     return add_location(description, prefix + ", ".join(new)) if new else description
+
+
+def merge_descriptions(description: Optional[str], later: Optional[str], own_district: Optional[str]) -> Optional[str]:
+    """Add a later part's area_description piece by piece ("; "), so nothing is written twice and
+    "also: <district>" never names the place's own district."""
+    for piece in (later or "").split(";"):
+        piece = piece.strip()
+        if piece.startswith("also:"):
+            names = [n.strip() for n in piece[len("also:"):].split(",")]
+            description = add_new_names(description, [n for n in names if n and norm(n) != norm(own_district)], "also: ")
+        else:
+            description = add_location(description, piece or None)
+    return description
 
 
 def build_record(p, window, caption=None):
@@ -339,7 +355,7 @@ def merge_record(first: dict, later: dict) -> None:
             if key in ("category", "price_range", "area"):
                 first["confidence"][key] = later["confidence"].get(key)
     # Every part's location words are kept (its "also: ..." districts too), and its district if it differs.
-    desc = add_location(first.get("area_description"), later.get("area_description"))
+    desc = merge_descriptions(first.get("area_description"), later.get("area_description"), first.get("area"))
     if first.get("area") and later.get("area") and later["area"] != first["area"]:
         desc = add_new_names(desc, [later["area"]], "also: ")
     first["area_description"] = desc

@@ -205,6 +205,17 @@ check("7c certificate error: fails at once (no 80 s of retries), not 'busy', cli
       code == 1 and len(FAKE.models.calls) == 1 and not SLEEPS and p7c.read_bytes() == raw
       and "the connection isn't trusted" in out and "busy" not in out, out)
 
+# 7d. the same certificate error as the Gemini library really raises it: wrapped in httpx2.ConnectError
+wrapped = httpx2.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+wrapped.__cause__ = ssl.SSLCertVerificationError(1, "certificate verify failed")
+p7d = clip("PP-006d", audio_file="PP-006.wav")
+raw = p7d.read_bytes()
+reset(plan={"gemini-3.8-flash": [wrapped]})
+code, out = run(p7d)
+check("7d certificate error inside httpx2.ConnectError: fails at once, says the connection isn't trusted",
+      code == 1 and len(FAKE.models.calls) == 1 and not SLEEPS and p7d.read_bytes() == raw
+      and "the connection isn't trusted" in out and "busy" not in out, out)
+
 # 7b. a bug in our code (not a network problem) -> shown at once, not "busy", no waits, no backup
 p7b = clip("PP-006b", audio_file="PP-006.wav")
 raw = p7b.read_bytes()

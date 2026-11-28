@@ -84,6 +84,9 @@ def check_place(place: dict, areas: List[dict]) -> List[str]:
         problems.append(f"{key}: write null, not {show(place[key])}")
     for key in not_text_fields(place):
         value = place[key]
+        if key in TEXT_FIELDS and isinstance(value, list) and all(isinstance(v, str) for v in value):
+            problems.append(f"{key}: write one text, not a list, e.g. {show('; '.join(value))}")
+            continue
         example = (f"[{', '.join(as_text(v) for v in as_list(value))}]" if isinstance(value, list) else as_text(value))
         problems.append(f"{key}: write text in quotes, e.g. {example}, not {show(value)}")
 

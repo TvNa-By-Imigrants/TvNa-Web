@@ -213,6 +213,12 @@ for key, value, words in [("price_range", 5, 'price_range: write text in quotes,
     code, out = run(f)
     check(f"T {key} = {json.dumps(value)}: problem, says to write text", code == 1 and words in out, out)
     f.unlink()
+f = clip_file("PP-T-list", [good_place(opening_hours=["Mon-Fri 7-21", "Sat 8-20"])], folder=T)
+code, out = run(f)
+check("T opening_hours as a list of texts: says write one text, with the joined text as the example",
+      code == 1 and 'opening_hours: write one text, not a list, e.g. "Mon-Fri 7-21; Sat 8-20"' in out
+      and "write text in quotes" not in out, out)
+f.unlink()
 for value in [None, MISSING, "$5", ["milk tea"], "milk tea", []]:
     text_value = value if not isinstance(value, list) else "$5"
     f = clip_file("PP-T-ok", [good_place(price_range=text_value, menu_items=value, place_name_alt=value)], folder=T)

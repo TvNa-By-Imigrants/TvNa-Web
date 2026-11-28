@@ -28,6 +28,7 @@ This is the main file. Every stage adds to it. Start each new clip from `tvna_cl
     "platform": "tiktok",
     "creator": "@motokew",
     "caption": "Tea time at Tea Kingdom 🍵 #phnompenh",
+    "cover_url": "https://res.cloudinary.com/<cloud name>/image/upload/v…/tvna/covers/PP-002.jpg",
     "posted_at": "2026-10-22",
     "collected_at": "2026-11-08"
   },
@@ -196,7 +197,7 @@ Anything not filled yet stays `null`.
 | Stage | Who | Fields | Script |
 |---|---|---|---|
 | 1. Collect data | Person gives the links; script | `clip_id`, `source` (url, video_id, platform, creator, collected_at; posted_at if given). Duplicates get no clip file | `stage1_new_clip.py` |
-| 2. Video to audio | Script | `audio_file`, `source.caption` (the creator's TikTok caption, hashtags included; `null` if none), `source.posted_at` if empty | `stage2_get_audio.py` |
+| 2. Video to audio | Script | `audio_file`, `source.caption` (the creator's TikTok caption, hashtags included; `null` if none), `source.cover_url` (the video's cover on Cloudinary; `null` if TikTok has none, `""` = not saved yet), `source.posted_at` if empty | `stage2_get_audio.py` |
 | 3. Audio to transcript | Script + Gemini | `stt`. Person: `ground_truth` (test clips only) | `stage3_transcribe.py` |
 | 4. Transcript + caption to fields | LLM + code | `extraction` and every place in `fields` (see below) | `stage4_extract_places.py` |
 | 5a. Remove duplicates | Script | moves duplicate clip files, adds `duplicate_of` | `stage5a_dedupe_clips.py` |

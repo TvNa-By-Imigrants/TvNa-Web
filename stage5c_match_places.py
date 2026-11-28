@@ -264,8 +264,7 @@ def main():
                 if changes:
                     index(entry)
                     places_changed = True
-                # The district note comes every run, so stage 6's district warning is explained here first;
-                # the website name note only when something changed (said once).
+                # District note every run (explains stage 6's warning); website name note only on a change.
                 notes = changes + other_district(entry, f.get("area"), areas) + (website_name(entry, f) if changes else [])
                 if notes:
                     report["matched"].append(f"{label} -> {set_by_team} (has a place_id; {'; '.join(notes)})")

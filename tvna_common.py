@@ -1,21 +1,26 @@
 """Shared helpers for the TVNA pipeline scripts (see docs/tvna_field_guide.md)."""
+import base64
 import difflib
 import http.client
 import importlib
 import json
+import os
 import re
 import shlex
 import ssl
+import subprocess
 import sys
 import time
 import unicodedata
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 from urllib.parse import urljoin, urlsplit
 
 BASE_DIR = Path(__file__).resolve().parent
+ENV_FILE = BASE_DIR / ".env"  # API keys, never in git
 DATA_DIR = BASE_DIR / "data"
 TEMPLATES_DIR = BASE_DIR / "templates"
 REFERENCE_DIR = DATA_DIR / "reference"  # fixed lists, set once
@@ -54,6 +59,10 @@ GEMINI_TRIES_PER_MODEL = 3
 GEMINI_WAITS = [10, 30]  # seconds before try 2 and try 3
 GEMINI_TRY_TIME_LIMIT_MS = 3 * 60 * 1000
 GEMINI_BUSY_CODES = {429, 500, 503, 504}
+
+CLOUDINARY_API = "https://api.cloudinary.com/v1_1"
+CLOUDINARY_KEYS = ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET")
+IMAGE_MAX_BYTES = 20 * 1024 * 1024
 
 
 def norm(s: Optional[str]) -> str:
@@ -278,7 +287,7 @@ def gemini_client(attempts: int = 5):
     from google import genai
     from google.genai import types
 
-    load_dotenv(BASE_DIR / ".env")
+    load_dotenv(ENV_FILE)
     return genai.Client(http_options=types.HttpOptions(
         retry_options=types.HttpRetryOptions(attempts=attempts)))
 
@@ -302,6 +311,17 @@ def connection_errors() -> tuple:
     return tuple(found)
 
 
+def untrusted_connection(error) -> Optional[ssl.SSLCertVerificationError]:
+    """The certificate error behind a connection error (httpx wraps it), if there is one."""
+    seen = set()
+    while error is not None and id(error) not in seen:
+        if isinstance(error, ssl.SSLCertVerificationError):
+            return error
+        seen.add(id(error))
+        error = error.__cause__ or error.__context__
+    return None
+
+
 def generate_with_backup(client, models: List[str], contents, config=None):
     """Ask Gemini, trying each model in turn while the earlier ones are busy. Every wait is printed.
     Returns (response, model used). Raises ClipError when all models stay busy, or on any other API error.
@@ -323,10 +343,11 @@ def generate_with_backup(client, models: List[str], contents, config=None):
                 if e.code not in GEMINI_BUSY_CODES:
                     raise ClipError(f"Gemini failed: {e.code} {e.status}: {e.message}") from None
                 reason = f"busy ({e.code})"
-            except ssl.SSLCertVerificationError as e:  # an OSError, but trying again won't help
-                raise ClipError(f"Gemini call failed: the connection isn't trusted ({e}). "
-                                "Check your network (e.g. a school or hotel Wi-Fi login page).") from None
             except connection_errors() as e:
+                bad = untrusted_connection(e)
+                if bad:  # trying again won't help
+                    raise ClipError(f"Gemini call failed: the connection isn't trusted ({bad}). "
+                                    "Check your network (e.g. a school or hotel Wi-Fi login page).") from None
                 reason = f"not answering ({type(e).__name__})"
             except Exception as e:  # anything else is not "busy": show the real cause at once
                 raise ClipError(f"Gemini call failed: {type(e).__name__}: {e}") from None
@@ -338,3 +359,64 @@ def generate_with_backup(client, models: List[str], contents, config=None):
             else:
                 print(f"  {model} is still {reason}.", flush=True)
     raise ClipError(f"Gemini is busy (tried {', '.join(models)}). Try this clip again later.")
+
+
+def make_jpg(src: Path, dst: Path, width: int) -> None:
+    """Any picture ffmpeg can read -> a JPG at most `width` px wide, without EXIF (so no GPS or camera data).
+    Raises ValueError with a short reason."""
+    result = subprocess.run(
+        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src), "-frames:v", "1",
+         "-vf", f"scale='min({width},iw)':-2", "-map_metadata", "-1", "-q:v", "3", str(dst)],
+        capture_output=True, text=True)
+    if result.returncode != 0 or not dst.is_file():
+        lines = result.stderr.strip().splitlines()
+        raise ValueError(f"can't read this picture ({lines[-1] if lines else f'ffmpeg exit code {result.returncode}'})")
+
+
+def cloudinary_keys() -> Optional[Tuple[str, str, str]]:
+    """(cloud name, API key, API secret) from .env, or None when one is missing."""
+    from dotenv import load_dotenv
+
+    load_dotenv(ENV_FILE)
+    keys = tuple((os.environ.get(k) or "").strip() for k in CLOUDINARY_KEYS)
+    return keys if all(keys) else None
+
+
+def cloudinary_upload(path: Path, public_id: str, keys: Tuple[str, str, str]) -> str:
+    """Upload a picture to Cloudinary under a fixed public_id (a 2nd upload replaces the 1st, no copy).
+    Returns its https link. Raises ValueError with a short reason; the secret is never in the message."""
+    cloud, api_key, secret = keys
+    try:
+        picture = path.read_bytes()
+    except OSError as e:
+        raise ValueError(f"can't read the picture ({e})") from None
+    boundary = uuid.uuid4().hex
+    parts = []
+    for name, value in (("public_id", public_id), ("overwrite", "true")):
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{path.name}"\r\n'
+                 "Content-Type: image/jpeg\r\n\r\n".encode() + picture + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    login = base64.b64encode(f"{api_key}:{secret}".encode()).decode()
+    request = urllib.request.Request(
+        f"{CLOUDINARY_API}/{cloud}/image/upload", data=b"".join(parts), method="POST",
+        headers={"Authorization": f"Basic {login}", "User-Agent": USER_AGENT,
+                 "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as answer:
+            body = json.load(answer)
+    except urllib.error.HTTPError as e:
+        try:
+            error = json.load(e).get("error")
+            reason = (error.get("message") if isinstance(error, dict) else None) or e.reason
+        except (ValueError, AttributeError, OSError):
+            reason = e.reason
+        raise ValueError(f"Cloudinary answered {e.code}: {reason}") from None
+    except urllib.error.URLError as e:
+        raise ValueError(f"no connection to Cloudinary ({e.reason})") from None
+    except (OSError, http.client.HTTPException, ValueError) as e:
+        raise ValueError(f"no answer from Cloudinary ({type(e).__name__})") from None
+    link = body.get("secure_url") if isinstance(body, dict) else None
+    if not isinstance(link, str) or not link.startswith("https://"):
+        raise ValueError("Cloudinary gave no link back")
+    return link

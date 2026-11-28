@@ -604,6 +604,24 @@ reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[], a
 run(q)
 f = (load(q)["fields"] or [{}])[0]
 check("F12 2 parts, 'street 51' then 'street 5': both kept", f.get("area_description") == "street 51; street 5", f)
+check("F13 2 parts: the later part's repeated words and its 'also: <own district>' are not added",
+      s4.merge_descriptions("near Central Market; also: Daun Penh", "near Central Market; also: Toul Kork", "Toul Kork")
+      == "near Central Market; also: Daun Penh"
+      and s4.merge_descriptions("near Central Market", "riverside; also: Sen Sok, Toul Kork", "Toul Kork")
+      == "near Central Market; riverside; also: Sen Sok", "")
+q = with_caption("PP-624", CAPTION, transcript=LONG2)
+reset(plan={"gemini-3.6-flash": [answer(luv(place_name_alt=[], segment_ids=[], area=["Chamkar Mon", "Daun Penh"],
+                                             area_description="near Central Market")),
+                                  answer(luv(place_name_alt=[], evidence_text="Luv selfie booth is really fun",
+                                             segment_ids=[65], area=["Daun Penh", "Chamkar Mon"],
+                                             area_description="near Central Market"))]})
+run(q)
+f = (load(q)["fields"] or [{}])[0]
+check("F13 2 parts with the same 2 districts swapped: words once, no 'also:' for its own district",
+      f.get("area") == "Chamkar Mon" and f.get("area_description") == "near Central Market; also: Daun Penh", f)
+check("F14 Khmer (no spaces between words): a name already in the text is not added again",
+      s4.add_new_names("នៅខណ្ឌដូនពេញ", ["ដូនពេញ"]) == "នៅខណ្ឌដូនពេញ"
+      and s4.add_new_names("នៅខណ្ឌដូនពេញ", ["ទួលគោក"]) == "នៅខណ្ឌដូនពេញ; ទួលគោក", "")
 
 # E. second review fixes
 f = one(luv(place_name="Brown Coffee & Bakery", place_name_alt=[], name_source="caption", area=["Tuol Kouk"],
