@@ -7,13 +7,12 @@ so a name Gemini got wrong can't become a place's name on the website. Each appr
 2. same name or alias (ignoring capitals, spaces and punctuation) -> matched
 3. name score 95 or more (Latin names only) -> matched; the new spelling is saved as an alias
 4. score 75-94, one name inside the other, or a close Khmer name -> unclear: place_id stays null
-5. anything else -> a new place file. Its place_id comes from the Google Maps place code, so the same shop
-   gets the same id on every computer (several people can match at once). No readable Maps link -> no new place.
+5. anything else -> a new place file with the next number (tvna_p_0002, ...).
 For an unclear place, the team writes the suggested place_id in the clip (same place) or "new" (a different
 place), then runs this again. Every name that gets a place_id is saved as an alias, so it matches exactly next time.
 Each place keeps one district (area, text). A clip that names another district is reported; the first one stays
 (one district per branch: Capstone 2).
-Team rule: run it on your own clips only, right after git pull, and push right after.
+Team rule: one person runs 5c at a time (numbers would clash), right after git pull, and pushes right after.
 The first run moves the old data/results/places.json into data/places/ (one file per place).
 
 Usage:
@@ -22,6 +21,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -30,6 +30,7 @@ from tvna_common import (
     AREAS_FILE,
     OLD_PLACES_FILE,
     PLACE_ID,
+    PLACE_ID_PREFIX,
     PLACES_DIR,
     as_list,
     display_path,
@@ -44,7 +45,6 @@ from tvna_common import (
     name_key,
     name_score,
     place_file,
-    place_id_from_maps,
     save_json,
 )
 
@@ -61,7 +61,6 @@ class MapsLinks:
 
     def __init__(self):
         self.keys: Dict[str, Optional[str]] = {}
-        self.reasons: Dict[str, str] = {}
         self.problems: List[str] = []
 
     def key(self, url: Optional[str]) -> Optional[str]:
@@ -72,7 +71,6 @@ class MapsLinks:
                 self.keys[url] = maps_key(url)
             except ValueError as e:
                 self.problems.append(f"{url}: {e}. Checked by name instead.")
-                self.reasons[url] = str(e)
                 self.keys[url] = None
         return self.keys[url]
 
@@ -89,20 +87,10 @@ def entry_names(entry: dict) -> List[str]:
     return [entry.get("place_name"), *as_list(entry.get("aliases"))]
 
 
-def new_place_id(place: dict, by_id: Dict[str, dict], links: MapsLinks) -> Tuple[Optional[str], str]:
-    """(place_id from the Maps place code, "") or (None, why no new place can be made)."""
-    url = place.get("google_maps_url")
-    code = links.key(url)
-    if not code:
-        if isinstance(url, str) and url in links.reasons:
-            return None, (f"can't read its Google Maps link ({links.reasons[url]}), so no place_id can be made. "
-                          "Run again online, or fix the link in 5b")
-        return None, "no Google Maps link, so no place_id can be made. Add the place's Share link in 5b"
-    place_id = place_id_from_maps(code)
-    if place_id in by_id:
-        return None, (f'{place_id} is already used by "{by_id[place_id].get("place_name")}" (made from this '
-                      f"Google Maps link). Same place: write {place_id}. A different place needs its own Maps link (5b)")
-    return place_id, ""
+def next_place_id(by_id: Dict[str, dict]) -> str:
+    """The next free number: tvna_p_0002 after tvna_p_0001 (one person runs 5c at a time until the database)."""
+    numbers = [int(m.group(1)) for pid in by_id if (m := re.fullmatch(rf"{PLACE_ID_PREFIX}(\d+)", pid))]
+    return f"{PLACE_ID_PREFIX}{max(numbers, default=0) + 1:04d}"
 
 
 def read_old_places(old_file: Path) -> List[dict]:
@@ -352,14 +340,11 @@ def main():
                 group, place_id, why = "new", None, "the team said: a different place"
             else:
                 group, place_id, why = find_match(f, names, name_index, by_id, links)
-            if group == "new":
-                place_id, problem = new_place_id(f, by_id, links)
-                if problem:
-                    group, why = "unclear", problem
             if group == "unclear":
                 report["unclear"].append(f"{label} -> {why} (left null)")
                 continue
             if group == "new":
+                place_id = next_place_id(by_id)
                 entry = {"place_id": place_id, "place_name": f["place_name"], "aliases": [], "area": None,
                          "google_maps_url": f.get("google_maps_url") or None, "photos": []}
                 by_id[place_id] = entry

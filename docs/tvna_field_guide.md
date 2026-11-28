@@ -353,7 +353,7 @@ Also unclear: a Maps link or a name shared by two or more places, and the same n
 | Result | What happens | Report group |
 |---|---|---|
 | One place matches | Reuse its `place_id`. New names are added to `aliases`. An empty `area` is filled; a different district is reported (`another district "…", places.json keeps "…"`) | matched |
-| No place matches | New place file `data/places/<place_id>.json`; the id comes from its Google Maps link (e.g. `tvna_p_3109513dc7`), so it is the same on every computer. No readable Maps link → unclear, no new place | new |
+| No place matches | New place file `data/places/<place_id>.json` with the next number (`tvna_p_0002`, ...). One person runs 5c at a time | new |
 | Unclear (several places, or only close) | `place_id` stays null. The team writes the suggested id in the clip (same place) or `"new"` (a different place), then runs 5c again | unclear |
 
 - Only `verified` places are matched. `rejected` places are skipped. Every other place is listed as `waiting for review` with its status, and nothing changes for it (not even a `place_id` the team wrote).

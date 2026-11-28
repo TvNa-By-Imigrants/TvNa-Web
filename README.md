@@ -171,16 +171,16 @@ PP-007.json  "Beans Barley", also "Beans and Barley"  (@pengpos)        ─┘  
 | 2c | Same name, but a **different** Maps link | **unclear**: "another branch, or a different place?" |
 | 3 | Name 95% or more alike with exactly one place (not for Khmer names) | same place; the new spelling is added to `aliases` |
 | 4 | 75–94% alike, one name inside the other (3+ letters), or a close Khmer name | **unclear**: `place_id` stays `null`; 5c suggests up to 3 places |
-| 5 | Anything else | **new** place, named after this clip's `place_name`. Its id comes from its Google Maps link (see below). No readable Maps link → **unclear**, no new place |
+| 5 | Anything else | **new** place, named after this clip's `place_name`, with the next number (`tvna_p_0002`, `tvna_p_0003`…) |
 
-**New ids come from the Google Maps link,** e.g. `tvna_p_3109513dc7`: 10 letters and numbers made from the place code in the link. So the same shop gets the same id on every computer, and two people can run 5c at the same time without giving one id to two shops. The places made before 2026-11-28 keep their ids (`tvna_p_0001`). The Share link and the long link of one place give the same id.
+**New ids are numbers:** the next free one after the highest (`tvna_p_0001` → `tvna_p_0002`). Two computers running 5c at once would both pick the same number, so **one person runs 5c at a time** until the database gives out the ids.
 
 **One file per place** (`data/places/`), so people matching different places never edit the same file. The first 5c run after 2026-11-28 moves the old `data/results/places.json` into these files and deletes it (git keeps its history).
 
 **Team rule, so 5c runs never clash:**
-1. Each person runs 5c only on **their own clips** (e.g. `data/clips/PP-04*.json`), not on `*.json`.
+1. **One person at a time** runs 5c. Say in the team chat before you start.
 2. `git pull` right before 5c, and commit + `git push` right after.
-3. If git still shows a conflict in a place file (two people added a name to the same place at the same time), keep both sides: every name in `aliases`.
+3. If git still shows a conflict in a place file, keep both sides: every name in `aliases`.
 
 Every name that gets a `place_id` is added to that place's `aliases`, so next time it matches exactly. That's why "Beans Bali" (PP-005's other name) and "Beans and Barley" (PP-007's) are both in `aliases` now: a future video with either spelling matches at once.
 
@@ -205,7 +205,7 @@ _Last updated: 2026-11-28_
 | 4. Places (transcript + caption, prompt v5) | `stage4_extract_places.py` | ✅ (Phnom Penh check planned) |
 | 5a. Duplicates safety net | `stage5a_dedupe_clips.py` | ✅ |
 | 5b. Team review | by hand, checked by `stage5b_validate_clips.py` | ✅ |
-| 5c. Match places (ids from the Maps link, one file per place, several people at once) | `stage5c_match_places.py` | ✅ |
+| 5c. Match places (one file per place; one person at a time) | `stage5c_match_places.py` | ✅ |
 | 6. Final dataset | `stage6_build_final_dataset.py` | ✅ |
 
 **Coming next, in order (the photo plan):**
@@ -274,7 +274,7 @@ python stage5a_dedupe_clips.py data/clips/*.json           # 5a. safety net
 # 5b. team review, by hand (see Stage 5b), then check it:
 python stage5b_validate_clips.py data/clips/*.json         # 5b. check the review (changes nothing)
 git pull                                                   # 5c. right before matching
-python stage5c_match_places.py data/clips/PP-04*.json      # 5c. your own clips only
+python stage5c_match_places.py data/clips/*.json           # 5c. one person at a time
 git add data/places data/clips && git commit -m "Match my clips" && git push   # 5c. right after
 python stage6_build_final_dataset.py data/clips/*.json     # 6. all clips
 ```
@@ -318,7 +318,7 @@ python stage6_build_final_dataset.py $T/clips/*.json --places-dir $T/places --ou
 | 3 | the same file | `stt.transcript` matches what is said |
 | 4 | the same file | `fields`: one object per place, with `verification_status`, `missing_fields`, `flags` |
 | 5b | (you edit it) | `cleaned_by` = your name, `"verified"` |
-| 5c | `$T/places/`, and the clip | a new place file, e.g. `tvna_p_3109513dc7.json`; the clip's `place_id` is that id |
+| 5c | `$T/places/`, and the clip | a new place file `tvna_p_0001.json`; the clip's `place_id` is `tvna_p_0001` |
 | 6 | `$T/final_dataset.json` | one record with your place, `popularity: 1` |
 
 **Then try these:**
@@ -571,7 +571,7 @@ Next: python stage5c_match_places.py data/clips/*.json
 6. **Status:** `"verified"` (correct, goes to the website) or `"rejected"` (not a place, not in Phnom Penh, or wrong).
 
 **Same place, other names.** Creators often call one place by different names (English or Khmer, other spellings). Gemini doesn't know the names we already have (planned for Capstone 2), so **you** link them:
-- **The Maps link links the names.** 5c checks the Google Maps link first. Copy the Share link of the **right** place (for a branch, the branch in the video), and two creators' names for it match even if they look nothing alike, e.g. an English name in one clip and a Khmer name in another. Check the name, photos and address on Maps before you copy: a wrong link joins the clip to the wrong place (if that link is already in a place file) or makes a second, duplicate place. A `verified` place needs its link: without one, 5c can't give it a `place_id`.
+- **The Maps link links the names.** 5c checks the Google Maps link first. Copy the Share link of the **right** place (for a branch, the branch in the video), and two creators' names for it match even if they look nothing alike, e.g. an English name in one clip and a Khmer name in another. Check the name, photos and address on Maps before you copy: a wrong link joins the clip to the wrong place (if that link is already in a place file) or makes a second, duplicate place.
 - **Is it already in `data/places/`?** Search it for the name, the other names and the link, e.g. `grep -il "hanjan" data/places/*.json`. If it's there, check it is the same shop.
 - **Keep every other name.** Add each name said, written or shown in this video (Khmer name, English name, the sign, another spelling) to `place_name_alt`. If the video only says the Khmer name but the caption, the sign or Google Maps shows the English one (or the other way round), add that one too. 5c can't match a Khmer name with an English one by letters, so these names and the Maps link are the only way they connect.
 - **After 5c:** decide every **unclear** place, and check that each **matched** place really is the same shop (see "What you do" in Stage 5c).
@@ -601,7 +601,7 @@ Example, PP-002: `missing_fields: ["area"]` → find "Hanjan Coffee" on Maps →
 
 ## Stage 5c: match places
 
-**In:** `verified` places, **your own clips** (team rule in [How `place_id` works](#how-place_id-works)). **Out:** a `place_id` for each, and one file per real place in `data/places/`, with all its names in `aliases`.
+**In:** `verified` places (one person at a time, see the team rule in [How `place_id` works](#how-place_id-works)). **Out:** a `place_id` for each, and one file per real place in `data/places/`, with all its names in `aliases`.
 
 So two clips about the same café count as **one place**. How it decides, and what to do with **unclear** or a **wrong match**: [How `place_id` works](#how-place_id-works).
 
@@ -614,7 +614,6 @@ waiting for review (1):
 
 - **Waiting for review:** not checked in 5b yet. Nothing changes for it.
 - When a clip calls a known place something else, 5c says `website name stays "…"` (the name in its place file).
-- **Unclear, "no Google Maps link":** add the place's Share link in 5b, then run 5c again. **"can't read its Google Maps link":** run again online, or fix the link.
 
 ---
 

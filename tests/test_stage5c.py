@@ -4,7 +4,6 @@ import email.message
 import hashlib
 import io
 import json
-import re
 import shutil
 import sys
 import tempfile
@@ -105,9 +104,6 @@ def maps(name):
     code = hashlib.sha256(name.encode()).hexdigest()
     return f"https://www.google.com/maps/place/x/data=!4m6!3m5!1s0x{code[:12]}:0x{code[12:20]}!8m2"
 
-def new_id(link):
-    return tc.place_id_from_maps(tc.maps_key(link))
-
 def clip(name, *places, folder=CLIPS):
     c = json.loads((PIPE / "templates/tvna_clip_template.json").read_text())
     c["clip_id"] = name
@@ -150,11 +146,10 @@ a = clip("PP-002", dict(place_name="Hanjang Coffee & Eatery", area="Chamkar Mon"
 b = clip("PP-003", dict(place_name="ALWAYS selfie booth", google_maps_url=maps("ALWAYS")))
 out = run(a, b)
 HJ, AL = pid(a), pid(b)
-check("1 no places yet: 2 new places, ids from their Maps links, one file each, Next stage 6",
-      HJ == new_id(maps("Hanjang")) and AL == new_id(maps("ALWAYS")) and HJ != AL
+check("1 no places yet: 2 new places, numbered tvna_p_0001 and tvna_p_0002, one file each, Next stage 6",
+      HJ == "tvna_p_0001" and AL == "tvna_p_0002"
       and sorted(snap()) == sorted([f"{HJ}.json", f"{AL}.json"])
       and "new (2):" in out and "python stage6_build_final_dataset.py data/clips/*.json" in out, out)
-check("1 the id is tvna_p_ + 10 letters/numbers", re.fullmatch(r"tvna_p_[0-9a-f]{10}", HJ or "") is not None, HJ)
 template = json.loads((PIPE / "templates/tvna_places_template.json").read_text())
 check("1 a new place file has the template's keys, in order, and photos []",
       list(entry(HJ)) == list(template) and entry(HJ)["photos"] == [], entry(HJ))
@@ -199,7 +194,7 @@ ff = load(f)
 ff["fields"][0]["place_id"] = "new"
 f.write_text(json.dumps(ff, ensure_ascii=False, indent=2), encoding="utf-8")
 out = run(f)
-check('6 team wrote "new": new place made', pid(f) == new_id(maps("Brew")) and "the team said: a different place" in out
+check('6 team wrote "new": new place made', pid(f) == "tvna_p_0004" and "the team said: a different place" in out
       and entry(pid(f))["place_name"] == "Brew Coffee", out)
 
 g = clip("PP-016", dict(place_name="Han Jan"))
@@ -219,10 +214,8 @@ mon = clip("PP-020", dict(place_name="Independence Monument", google_maps_url=LO
 run(mon)
 mon_km = clip("PP-021", dict(place_name="វិមានឯករាជ្យ", google_maps_url="https://maps.app.goo.gl/abc123"))
 out = run(mon_km)
-check("9 Khmer name + Share link to the same place: matched by Maps link", pid(mon_km) == pid(mon) == new_id(LONG)
+check("9 Khmer name + Share link to the same place: matched by Maps link", pid(mon_km) == pid(mon) is not None
       and "same Google Maps link" in out and "វិមានឯករាជ្យ" in entry(pid(mon))["aliases"], out)
-check("9 a Share link and a long link to one place give the same new id",
-      new_id("https://maps.app.goo.gl/abc123") == new_id(LONG) == new_id(LONG2))
 
 put({"place_id": "tvna_p_0800", "place_name": "No Link Yet Cafe", "aliases": [], "area": None,
      "google_maps_url": None, "photos": []})
@@ -279,11 +272,8 @@ for i, (kind, over, drop) in enumerate([
     out1 = run(p)
     raw, places_raw = p.read_bytes(), snap()
     out = run(p)
-    if has_link:
-        first, said = (pid(p) or "").startswith("tvna_p_"), "gives a new place_id"
-    else:
-        first, said = (pid(p) is None and "no Google Maps link, so no place_id can be made" in out1), "is unclear (no Maps link)"
-    check(f"R {kind}: 1st run {said}; 2nd run changes nothing (clip and place files)",
+    first = (pid(p) or "").startswith("tvna_p_")
+    check(f"R {kind}: 1st run gives a new place_id; 2nd run changes nothing (clip and place files)",
           first and p.read_bytes() == raw and snap() == places_raw
           and "new (0)" in out and "matched (0)" in out, (out1, out))
 
@@ -322,11 +312,10 @@ run(sp)
 e = entry(pid(sp)) if pid(sp) else {}
 check('S1 place_name_alt typed as one text, not a list: saved as one alias, not letters',
       e.get("aliases") == ["Saffron Lane", "Saffron"], e)
-files = snap()
-sn = clip("PP-306", dict(place_name="Empty Link Bistro", google_maps_url="  "))
-out = run(sn)
-check('S2 google_maps_url of only spaces: no place made, the team is told to add the Share link',
-      pid(sn) is None and snap() == files and "no Google Maps link, so no place_id can be made" in out, out)
+sn = clip("PP-306", dict(place_name="Empty Link Bistro", google_maps_url=""))
+run(sn)
+e = entry(pid(sn)) if pid(sn) else {}
+check('S2 google_maps_url "" in a clip -> null in the place file', "google_maps_url" in e and e["google_maps_url"] is None, e)
 
 put({"place_id": "tvna_p_0900", "place_name": "Null Alias Cafe", "aliases": None, "area": None, "google_maps_url": None})
 put({"place_id": "tvna_p_0901", "place_name": "No Alias Key Bar", "area": []})
@@ -348,10 +337,8 @@ try:
     crashed = ""
 except Exception as ex:  # noqa: BLE001
     out, crashed = "", repr(ex)
-check("S4 Maps link times out: no crash, reported, no new place (its id needs the link): run again online",
-      not crashed and "maps.app.goo.gl/slow: no connection (TimeoutError)" in out and pid(sl) is None
-      and "can't read its Google Maps link (no connection (TimeoutError)), so no place_id can be made. Run again online"
-      in out, crashed or out)
+check("S4 Maps link times out: no crash, reported, place checked by name",
+      not crashed and "maps.app.goo.gl/slow: no connection (TimeoutError)" in out and bool(pid(sl)), crashed or out)
 
 ROUTES["https://maps.app.goo.gl/ctrlc"] = KeyboardInterrupt()
 first = clip("PP-304", dict(place_name="Brand New Noodle Bar", google_maps_url=maps("Brand New")))
@@ -507,28 +494,15 @@ for old_area, want in [(["BKK1", "near market"], "BKK1"), ([], None), ([None, " 
     run(t9)
     check(f"T9 R {old_area}: 2nd run changes nothing", snap() == before)
 
-# M. several people matching at once: ids from the Maps place code, one file per place
-dup = clip("PP-450", dict(place_name="Hanjang Copy", place_id="new", google_maps_url=maps("Hanjang")))
-before = snap()
-out = run(dup)
-check('M1 team wrote "new" but a known place has the same Maps link: unclear, says which id to write, "new" kept',
-      pid(dup) == "new" and snap() == before
-      and f'{HJ} is already used by "Hanjang Coffee & Eatery" (made from this Google Maps link). Same place: write {HJ}'
-      in out and "A different place needs its own Maps link" in out, out)
-
-PC1, PC2 = WORK / "pc1", WORK / "pc2"
-for pc in (PC1, PC2):
-    (pc / "clips").mkdir(parents=True)
-x1 = clip("PP-500", dict(place_name="Shared Shop", google_maps_url=maps("Shared")), folder=PC1 / "clips")
-y1 = clip("PP-501", dict(place_name="Only On One", google_maps_url=maps("One")), folder=PC1 / "clips")
-x2 = clip("PP-600", dict(place_name="Shared Shop Cafe", google_maps_url=maps("Shared")), folder=PC2 / "clips")
-y2 = clip("PP-601", dict(place_name="Only On Two", google_maps_url=maps("Two")), folder=PC2 / "clips")
-run(x1, y1, places=PC1 / "places")
-run(x2, y2, places=PC2 / "places")
-check("M2 two computers at once: the same shop gets the same id, different shops different ids",
-      pid(x1) == pid(x2) == new_id(maps("Shared")) and len({pid(x1), pid(y1), pid(y2)}) == 3, (pid(x1), pid(x2)))
-check("M2 the two place folders share only the same shop's file (the one file git may need joined)",
-      set(snap(PC1 / "places")) & set(snap(PC2 / "places")) == {f"{pid(x1)}.json"})
+# M. counting ids and one file per place
+NUM = WORK / "num"
+put({"place_id": "tvna_p_0001", "place_name": "Old One"}, NUM)
+put({"place_id": "tvna_p_89a8cdcf55", "place_name": "Maps Id Place"}, NUM)
+put({"place_id": "tvna_p_0007", "place_name": "Seventh"}, NUM)
+(NUM / "clips").mkdir()
+n1 = clip("PP-500", dict(place_name="Brand New Counted Cafe"), folder=NUM / "clips")
+run(n1, places=NUM)
+check("M2 a new place gets the next free number (after the highest; other ids are skipped)", pid(n1) == "tvna_p_0008", pid(n1))
 
 MIG = WORK / "mig"
 (MIG / "clips").mkdir(parents=True)
@@ -610,15 +584,13 @@ check("M6 a place file with another name (e.g. beans_barley.json): refused, says
       "beans_barley.json: a place file is named after its place_id" in out and "Nothing changed" in out, out)
 (MIG / "places/beans_barley.json").unlink()
 
-files = snap()
 ml = clip("PP-307", dict(place_name="List Link Lounge", google_maps_url=["https://maps.app.goo.gl/x"]))
 try:
     out = run(ml)
     crashed = ""
 except Exception as ex:  # noqa: BLE001
     out, crashed = "", repr(ex)
-check("S2b google_maps_url typed as a list: no crash, no place made, told to add the link",
-      not crashed and pid(ml) is None and snap() == files and "no Google Maps link" in out, crashed or out)
+check("S2b google_maps_url typed as a list: no crash", not crashed and bool(pid(ml)), crashed or out)
 
 target = WORK / "save" / "x.json"
 try:
@@ -629,7 +601,7 @@ except TypeError:
 check("M7 a save that fails part way leaves no .part file and no half file", raised
       and not target.exists() and not list((WORK / "save").glob("*.part")))
 check("M7 no half-written (.part) file left anywhere", not list(WORK.rglob("*.part")), list(WORK.rglob("*.part")))
-check("M8 the Next line tells the team to push right after matching", "git push" in run(bc, places=PC1 / "places"))
+check("M8 the Next line tells the team to push right after matching", "git push" in run(bc, places=NUM))
 
 print(f"\n{sum(results)}/{len(results)} passed")
 shutil.rmtree(WORK, ignore_errors=True)

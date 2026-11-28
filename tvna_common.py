@@ -1,7 +1,6 @@
 """Shared helpers for the TVNA pipeline scripts (see docs/tvna_field_guide.md)."""
 import base64
 import difflib
-import hashlib
 import http.client
 import importlib
 import json
@@ -273,11 +272,6 @@ def name_score(a: Optional[str], b: Optional[str]) -> int:
 
 PLACE_ID_PREFIX = "tvna_p_"
 PLACE_ID = re.compile(r"tvna_p_[0-9a-z]+")
-
-
-def place_id_from_maps(code: str) -> str:
-    """A new place's id from its Google Maps place code (maps_key): the same shop gets the same id on every computer."""
-    return PLACE_ID_PREFIX + hashlib.sha256(code.encode()).hexdigest()[:10]
 
 
 def place_file(folder, place_id: str) -> Path:
