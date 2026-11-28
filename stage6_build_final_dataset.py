@@ -7,6 +7,8 @@ first one in the place file, else the first one from the clips (one district per
 creator ("", or only spaces) is written as null. Only places the team approved ("verified") are published.
 Each place gets one name, place_name from the place file; other names
 (aliases, place_name_alt) stay in the pipeline for matching and are not published.
+Each place gets its photos (url, source, credit) from its place file; a place with no photo yet, or a mistake in its
+photo list, is left out with a warning (stage 5d adds photos). Each mention gets the video link and its cover picture.
 
 Usage:
     python stage6_build_final_dataset.py data/clips/*.json   # -> data/results/final_dataset.json
@@ -15,6 +17,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 from tvna_common import (
     AREAS_FILE,
@@ -31,6 +34,7 @@ from tvna_common import (
     save_json,
     text_or_none,
 )
+from tvna_review import photo_problems, photos_of
 
 LIST_FIELDS = ["category", "price_range", "area", "area_description", "opening_hours", "menu_items"]
 CHECK_FIELDS = ["category", "price_range", "opening_hours"]
@@ -51,6 +55,29 @@ def add_unique(values, new) -> list:
     return not_text
 
 
+def photo_warning(place) -> Optional[str]:
+    """Why this place can't be published for its photos, or None when it has 1 to 5 good ones."""
+    place_id, name = place["place_id"], text_or_none(place.get("place_name"))
+    who = f'{place_id} "{name}"' if name else f"{place_id} (no name)"
+    count, problems = photo_problems(place)
+    if problems:
+        return (f"{who}: {len(problems)} photo problem{'s' if len(problems) > 1 else ''}, so not published. "
+                "See: python stage5d_check_photos.py")
+    if not count:
+        return (f"{who}: no photo yet, so not published. Add 1 to 5: python stage5d_add_photo.py {place_id} "
+                '<photo file or image link> --source "Google Maps" --credit "<who>"')
+    return None
+
+
+def https_link(value, label: str, warn) -> Optional[str]:
+    """A link for the website: https only (the page puts it in a link or a picture); anything else -> null, warned."""
+    link = text_or_none(value)
+    if link and not link.startswith("https://"):
+        warn(f"{label} {json.dumps(link, ensure_ascii=False)} is not an https:// link, published as null")
+        return None
+    return link
+
+
 def new_record(place):
     rec = {
         "place_id": place["place_id"],
@@ -60,6 +87,8 @@ def new_record(place):
         "area": [],
         "area_description": [],
         "google_maps_url": text_or_none(place.get("google_maps_url")),
+        "photos": [{"url": photo["url"], "source": text_or_none(photo["source"]), "credit": text_or_none(photo["credit"])}
+                   for photo in photos_of(place)],
         "opening_hours": [],
         "menu_items": [],
         "popularity": 0,
@@ -86,7 +115,7 @@ def main():
                  "python stage5c_match_places.py data/clips/*.json")
     areas = load_areas(args.areas)
     records, warnings = {}, []
-    no_place_id = 0
+    no_place_id, no_photo = 0, set()
 
     def warn(text):
         if text not in warnings:
@@ -115,6 +144,11 @@ def main():
             if place_id not in places:
                 warn(f"{label}: {place_id} has no place file, so not published. Run stage 5c (or git pull)")
                 continue
+            photo_reason = photo_warning(places[place_id])
+            if photo_reason:
+                warn(photo_reason)
+                no_photo.add(place_id)
+                continue
             if place_id not in records:
                 records[place_id] = new_record(places[place_id])
             rec = records[place_id]
@@ -137,7 +171,11 @@ def main():
                 if opinion and norm(opinion) not in {norm(o) for o in (old or "").split("; ")}:
                     mention["speaker_opinion"] = f"{old}; {opinion}" if old else opinion
             else:
-                rec["mentions"].append({"clip_id": clip_id, "creator": creator, "speaker_opinion": opinion})
+                rec["mentions"].append({"clip_id": clip_id, "creator": creator,
+                                        "video_url": https_link(source.get("url"), f"{name}: source.url", warn),
+                                        "cover_url": https_link(source.get("cover_url"), f"{name}: source.cover_url",
+                                                                warn),
+                                        "speaker_opinion": opinion})
 
         if published and not creator:
             warn(f"{name}: no creator, so this clip is not counted in popularity")
@@ -161,6 +199,14 @@ def main():
                 warnings.append(f"{rec['place_id']}: clips disagree on {key}: {rec[key]}")
 
     result = sorted(records.values(), key=lambda r: r["place_id"])
+    if no_photo:
+        warnings.append(f"{len(no_photo)} verified place{'s' if len(no_photo) > 1 else ''} left out for photos (above)")
+    if not result and no_photo:
+        print(f"warnings ({len(warnings)}):")
+        for w in warnings:
+            print(f"  {w}")
+        sys.exit(f"Nothing to publish: every verified place still needs a photo. {display_path(Path(args.output))} "
+                 "not changed.")
     save_json(args.output, result)
 
     print(f"{len(result)} places from {len(args.clips)} clips -> {args.output}")

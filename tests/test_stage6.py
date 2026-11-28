@@ -29,12 +29,16 @@ def load(p):
 def write(p, data):
     Path(p).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
+PHOTO = {"url": "https://res.cloudinary.com/t/image/upload/v1/tvna/places/p.jpg", "source": "Google Maps",
+         "credit": "Dara S.", "sha256": "a" * 64}
+
 def write_places(entries):
-    """One file per place, as stage 5c makes them; old files are removed first."""
+    """One file per place, as stage 5c makes them (with one photo, as 5d adds it, unless photos is given);
+    old files are removed first."""
     shutil.rmtree(PLACES, ignore_errors=True)
     PLACES.mkdir()
     for e in entries:
-        write(PLACES / f"{e['place_id']}.json", e)
+        write(PLACES / f"{e['place_id']}.json", e if "photos" in e else e | {"photos": [PHOTO]})
 
 def drop_missing(d):
     return {k: v for k, v in d.items() if v is not MISSING}
@@ -328,7 +332,96 @@ raw_out = OUT.read_bytes()
 code2, out2 = run()
 check("B5 2nd run: same output and report", code2 == 0 and OUT.read_bytes() == raw_out and out2 == out, out2)
 
+# P. photos (from stage 5d) and each mention's video and cover links
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+two = [dict(PHOTO, url="https://res.cloudinary.com/t/2.jpg", credit="  Beans Barley page ", source="Shop's own page",
+            sha256="b" * 64), PHOTO]
+write_places([drop_missing({"place_id": f"tvna_p_000{i}", "place_name": n, "area": "Chamkar Mon", "photos": ph})
+              for i, n, ph in [(1, "Two Photos", two), (2, "Empty List", []), (3, "Null Photos", None),
+                               (4, "Empty Text", ""), (5, "No Photos Key", MISSING), (6, "Six Photos",
+                               [dict(PHOTO, sha256=str(k) * 64, url=f"https://r/{k}.jpg") for k in range(6)]),
+                               (7, "Http Photo", [dict(PHOTO, url="http://insecure/x.jpg")]), (8, "Text Photos", "https://x.jpg")]])
+write(PLACES / "tvna_p_0005.json", {"place_id": "tvna_p_0005", "place_name": "No Photos Key", "area": "Chamkar Mon"})
+covers = {"PP-901": ("https://www.tiktok.com/@a/video/1", "https://res.cloudinary.com/t/tvna/covers/PP-901.jpg"),
+          "PP-902": (None, None), "PP-903": ("", ""), "PP-904": (MISSING, MISSING), "PP-905": ("  ", "   ")}
+for cid, (url, cover) in covers.items():
+    c = clip(cid, [place(place_id=f"tvna_p_000{i}") for i in range(1, 9)], creator=f"@{cid}")
+    d = load(c)
+    for key, value in (("url", url), ("cover_url", cover)):
+        if value is MISSING:
+            del d["source"][key]
+        else:
+            d["source"][key] = value
+    write(c, d)
+code, out = run()
+data = load(OUT) if OUT.exists() else []
+rec = {r["place_id"]: r for r in data}
+r1 = rec.get("tvna_p_0001", {})
+check("P1 photos published in order with url, source and credit only (no sha256); credit trimmed",
+      code == 0 and r1.get("photos") == [{"url": "https://res.cloudinary.com/t/2.jpg", "source": "Shop's own page",
+                                          "credit": "Beans Barley page"},
+                                         {"url": PHOTO["url"], "source": "Google Maps", "credit": "Dara S."}]
+      and "sha256" not in OUT.read_text(encoding="utf-8"), (code, out, r1))
+check('P2 photos [] / null / "" / missing: left out, warned once each with the 5d command',
+      all(f"tvna_p_000{i}" not in rec for i in (2, 3, 4, 5))
+      and all(out.count(f'tvna_p_000{i} "{n}": no photo yet, so not published. Add 1 to 5: '
+                        f"python stage5d_add_photo.py tvna_p_000{i}") == 1
+              for i, n in [(2, "Empty List"), (3, "Null Photos"), (4, "Empty Text"), (5, "No Photos Key")]), (rec, out))
+check("P3 a mistake in the photo list (6 photos, an http link, not a list): left out, points to the checker",
+      all(f"tvna_p_000{i}" not in rec for i in (6, 7, 8))
+      and all(f'tvna_p_000{i} "{n}": 1 photo problem, so not published. See: python stage5d_check_photos.py' in out
+              for i, n in [(6, "Six Photos"), (7, "Http Photo"), (8, "Text Photos")])
+      and "7 verified places left out for photos (above)" in out, out)
+check("P4 only places with photos published; no creator or place_id warning because of the left-out ones",
+      sorted(rec) == ["tvna_p_0001"] and "no creator" not in out and "no place_id" not in out, (sorted(rec), out))
+m = {x["clip_id"]: x for x in r1.get("mentions", [])}
+check("P5 mention video_url and cover_url: filled kept",
+      m.get("PP-901", {}).get("video_url") == covers["PP-901"][0] and m.get("PP-901", {}).get("cover_url") == covers["PP-901"][1], m)
+check('P6 video_url and cover_url null / "" / missing / only spaces -> null, never ""',
+      all(cid in m and m[cid]["video_url"] is None and m[cid]["cover_url"] is None for cid in ("PP-902", "PP-903", "PP-904", "PP-905"))
+      and '""' not in OUT.read_text(encoding="utf-8"), m)
+check("P7 photo and mention keys match the template, in order",
+      all(list(ph) == list(template["photos"][0]) for ph in r1.get("photos", []))
+      and all(list(x) == list(template["mentions"][0]) for x in r1.get("mentions", [])), r1)
+raw_out = OUT.read_bytes() if OUT.exists() else b""
+raw_in = {q: q.read_bytes() for q in [*PLACES.glob("*.json"), *CLIPS.glob("*.json")]}
+code2, out2 = run()
+check("P8 2nd run: same output and report, no place or clip file changed",
+      code2 == 0 and OUT.read_bytes() == raw_out and out2 == out and all(q.read_bytes() == b for q, b in raw_in.items()), out2)
+
+# Q. fixes from the code review
+for f in CLIPS.glob("*.json"):
+    f.unlink()
+write_places([{"place_id": "tvna_p_0001", "place_name": "Has Photo", "area": "Chamkar Mon",
+               "photos": [dict(PHOTO, source="Other: Facebook page  ")]},
+              {"place_id": "tvna_p_0002", "place_name": "", "area": "Chamkar Mon", "photos": []}])
+c = clip("PP-951", [place(place_id="tvna_p_0001"), place(place_id="tvna_p_0002")])
+d = load(c)
+d["source"]["url"], d["source"]["cover_url"] = "javascript:alert(1)", "http://insecure/cover.jpg"
+write(c, d)
+code, out = run()
+r = (load(OUT) or [{}])[0] if OUT.exists() else {}
+mention = (r.get("mentions") or [{}])[0]
+check("Q1 video_url / cover_url that are not https:// links: published as null, warned",
+      code == 0 and mention.get("video_url", "x") is None and mention.get("cover_url", "x") is None
+      and 'PP-951.json: source.url "javascript:alert(1)" is not an https:// link, published as null' in out
+      and 'PP-951.json: source.cover_url "http://insecure/cover.jpg" is not an https:// link' in out
+      and "javascript" not in OUT.read_text(encoding="utf-8"), (out, r))
+check('Q2 photo source trimmed ("Other: Facebook page")', (r.get("photos") or [{}])[0].get("source") == "Other: Facebook page", r)
+check('Q3 a place with no name: the photo warning says "(no name)", not "None"',
+      "tvna_p_0002 (no name): no photo yet" in out and '"None"' not in out, out)
+before = OUT.read_bytes()
+write_places([{"place_id": "tvna_p_0001", "place_name": "Beans Barley", "area": "Prampi Makara", "photos": []}])
+code, out = run()
+check("Q4 every verified place left out for photos: stops (exit 1), final_dataset.json not changed, says why",
+      code == 1 and OUT.read_bytes() == before and "Nothing to publish: every verified place still needs a photo" in out
+      and 'tvna_p_0001 "Beans Barley": no photo yet' in out and "not changed" in out, out)
+code2, out2 = run()
+check("Q5 2nd run: same report, file still not changed", (code2, out2) == (code, out) and OUT.read_bytes() == before, out2)
+
 # C. place files missing or broken: a clear message, not a Python error
+raw_out = OUT.read_bytes()
 shutil.rmtree(PLACES)
 code, out = run()
 check("C1 no places folder: says run stage 5c first, exit 1, output not written again",

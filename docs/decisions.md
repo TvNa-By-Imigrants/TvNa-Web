@@ -4,6 +4,20 @@ Key choices and why, newest first. Older decisions (before 2026-11-17) are still
 
 ---
 
+## 2026-11-28: Stage 6 publishes photos and video links; no photo, not published
+
+**Decision:**
+- Each record in `final_dataset.json` gets `photos: [{url, source, credit}]` from its place file (`sha256` stays in the pipeline). Each mention gets `video_url` (the TikTok link) and `cover_url` (from stage 2, or `null`).
+- A verified place with no photo yet is left out, with a warning giving the 5d command. A place with a mistake in its photo list is left out too, pointing to `stage5d_check_photos.py`.
+
+**Why:** the website needs at least one picture per place; leaving a place out is safer than showing an empty card, and the warning says what to do.
+
+**Limit:** Beans Barley (`tvna_p_0001`) drops off the website until it gets a photo.
+
+**Note for the website team:** new fields `photos`, `mentions[].video_url`, `mentions[].cover_url`.
+
+---
+
 ## 2026-11-28: Photos belong to the place (stage 5d), on Cloudinary
 
 **Decision:**

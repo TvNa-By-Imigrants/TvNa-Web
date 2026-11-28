@@ -53,7 +53,7 @@ Each video is **one clip file**, `data/clips/PP-001.json`. Every stage reads it,
 | **5b. Team review** | **people** | places that are not `verified` yet | fills what is missing, then sets `verification_status` to `verified` or `rejected` |
 | **5c. Match** | script | `verified` places | `fields[].place_id` in the clip; one file per real place, `data/places/<place_id>.json` |
 | **5d. Photos** | **people** + script (Cloudinary) | new places (0 photos) | 1–5 photos in the place file: `photos: [{url, source, credit, sha256}]` |
-| **6. Final dataset** | script | clips + `data/places/` + `areas.json` | `data/results/final_dataset.json` (only `verified` places) |
+| **6. Final dataset** | script | clips + `data/places/` + `areas.json` | `data/results/final_dataset.json` (only `verified` places with at least 1 photo; with photos, video links and covers) |
 
 Stages 2, 3 and 4 cost time and Gemini tokens, so duplicates are stopped **before** them, in stage 1.
 
@@ -208,11 +208,10 @@ _Last updated: 2026-11-28_
 | 5b. Team review | by hand, checked by `stage5b_validate_clips.py` | ✅ |
 | 5c. Match places (one file per place; one person at a time) | `stage5c_match_places.py` | ✅ |
 | 5d. Photos for new places (1–5, on Cloudinary) | `stage5d_add_photo.py`, checked by `stage5d_check_photos.py` | ✅ (waiting for the Cloudinary keys) |
-| 6. Final dataset | `stage6_build_final_dataset.py` | ✅ |
+| 6. Final dataset (with photos, video links and covers) | `stage6_build_final_dataset.py` | ✅ |
 
 **Coming next, in order (the photo plan):**
-1. Stage 6 publishes the photos and each video's cover (a place with no photo is left out)
-2. Docs for the new flow, then the review page for the team
+1. Docs for the new flow, then the review page for the team
 
 Later: stages 2–4 refuse a clip file that is a copy of another clip; the Phnom Penh check in stage 4.
 
@@ -623,7 +622,7 @@ waiting for review (1):
 
 ## Stage 5d: photos for new places
 
-**In:** places with **0 photos** (new places from 5c; a known place already has its photos). **Out:** 1–5 photos in the place file. Photo 1 is the main one on the website. A place needs at least 1 to be published (from the next step, C).
+**In:** places with **0 photos** (new places from 5c; a known place already has its photos). **Out:** 1–5 photos in the place file. Photo 1 is the main one on the website. A place needs at least 1 to be published (stage 6 leaves it out until then).
 
 ```sh
 python stage5d_check_photos.py        # problems / need photos (with the name and Maps link) / ready
@@ -648,12 +647,13 @@ python stage5d_add_photo.py tvna_p_0002 --remove 2          # a wrong photo (ask
 - **one name** (`place_name` from the place file); other names never reach the website
 - **one district** in `area` (text, or `null`): the one in the place file, else the first one from the clips. Clips naming other districts → a warning (one district per branch: Capstone 2)
 - `category`, `price_range`, `opening_hours`, `menu_items`: every different value from all clips
-- `mentions`: one per clip (`clip_id`, `creator`, `speaker_opinion`)
+- `photos`: 1–5 from the place file (`url`, `source`, `credit`; photo 1 is the main one)
+- `mentions`: one per clip (`clip_id`, `creator`, `video_url` = the TikTok link, `cover_url` = its cover picture or `null`, `speaker_opinion`)
 - `popularity`: number of different creators who posted about it
 
-Only `verified` places with a `place_id` are published. It warns about the rest, when clips disagree (e.g. two price ranges), and about a value that isn't text (a number typed by hand is published as text, e.g. `"5"`). It rebuilds the file from scratch each time. No place files in `data/places/` yet → it says to run 5c first.
+Only `verified` places with a `place_id` **and at least 1 photo** are published (no photo yet → a warning with the 5d command; a mistake in the photo list → a warning pointing to `stage5d_check_photos.py`). If **every** verified place still needs a photo, it stops and keeps the old file (no empty website file). A video link or cover that isn't an `https://` link is published as `null` with a warning. It warns about the rest, when clips disagree (e.g. two price ranges), and about a value that isn't text (a number typed by hand is published as text, e.g. `"5"`). It rebuilds the file from scratch each time. No place files in `data/places/` yet → it says to run 5c first.
 
-> **Website team:** since 2026-11-18 the file is at **`data/results/final_dataset.json`** (it was `data/final_dataset.json`). It has **no `place_name_alt`** (since 2026-11-17). Use `place_name`. `area` is **one district as text** (e.g. `"Chamkar Mon"`) or `null`, not a list, in every file (since 2026-11-18). Fields: `templates/tvna_final_dataset_template.json`.
+> **Website team:** since 2026-11-18 the file is at **`data/results/final_dataset.json`** (it was `data/final_dataset.json`). It has **no `place_name_alt`** (since 2026-11-17). Use `place_name`. `area` is **one district as text** (e.g. `"Chamkar Mon"`) or `null`, not a list, in every file (since 2026-11-18). New on 2026-11-28: `photos` (`[{url, source, credit}]`, 1–5, the first is the main one) and, in each mention, `video_url` and `cover_url` (or `null`); a place with no photo yet is not in the file. Fields: `templates/tvna_final_dataset_template.json`.
 
 ---
 

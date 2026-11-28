@@ -7,6 +7,13 @@
       "area": null,
       "area_description": [],
       "google_maps_url": null,
+      "photos": [
+        {
+          "url": null,
+          "source": null,
+          "credit": null
+        }
+      ],
       "opening_hours": [],
       "menu_items": [],
       "popularity": 0,
@@ -14,6 +21,8 @@
         {
           "clip_id": null,
           "creator": null,
+          "video_url": null,
+          "cover_url": null,
           "speaker_opinion": null
         }
       ]

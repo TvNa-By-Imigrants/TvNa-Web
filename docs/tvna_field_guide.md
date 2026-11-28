@@ -142,7 +142,7 @@ The English and the Khmer name both match. For example, ចំការមន be
 
 Made automatically in stage 6 from the 3 files above.
 
-**One name per place:** `place_name` comes from places.json. Other names (`aliases` in places.json, `place_name_alt` in the clips) are **not** in this file. They stay in the pipeline only, for matching. Stage 5c only creates a place from a `verified` clip, so the name the team approved in 5b becomes the website name (section 6, "Name").
+**One name per place:** `place_name` comes from the place file. Other names (`aliases` in the place file, `place_name_alt` in the clips) are **not** in this file. They stay in the pipeline only, for matching. Stage 5c only creates a place from a `verified` clip, so the name the team approved in 5b becomes the website name (section 6, "Name").
 
 ```json
 {
@@ -153,15 +153,22 @@ Made automatically in stage 6 from the 3 files above.
   "area": "Boeng Keng Kang",
   "area_description": [],
   "google_maps_url": "https://maps.app.goo.gl/...",
+  "photos": [
+    {"url": "https://res.cloudinary.com/.../tvna/places/tvna_p_0005-3f9a1c0b7e.jpg", "source": "Google Maps", "credit": "Dara S."}
+  ],
   "opening_hours": [],
   "menu_items": ["Jasmine tea", "Osmanthus Oolong tea"],
   "popularity": 2,
   "mentions": [
-    {"clip_id": "PP-002", "creator": "@motokew", "speaker_opinion": "Recommends the Jasmine tea and the Osmanthus Oolong tea."},
-    {"clip_id": "PP-007", "creator": "@foodkh",  "speaker_opinion": "..."}
+    {"clip_id": "PP-002", "creator": "@motokew", "video_url": "https://www.tiktok.com/@motokew/video/...",
+     "cover_url": "https://res.cloudinary.com/.../tvna/covers/PP-002.jpg",
+     "speaker_opinion": "Recommends the Jasmine tea and the Osmanthus Oolong tea."},
+    {"clip_id": "PP-007", "creator": "@foodkh", "video_url": "...", "cover_url": null, "speaker_opinion": "..."}
   ]
 }
 ```
+
+**Photos:** 1 to 5 from the place file (photo 1 is the main one), without `sha256`. A verified place with no photo yet is **not** in this file (stage 6 warns and gives the 5d command). **Mentions:** `video_url` is the TikTok link, `cover_url` the video's cover picture (stage 2), or `null` when it has none yet.
 
 ---
 
@@ -223,7 +230,7 @@ In stage 4:
 | Field | Rule |
 |---|---|
 | `place_name` | The English name if one is said or written, otherwise the Khmer name. When the TikTok caption writes that name, the caption's spelling is used (speech-to-text may mishear it). In 5b the team picks the right one (it may swap it with a name in `place_name_alt`); see "Name" in section 6 |
-| `place_name_alt` | Every other name said or written **in this clip only**: Khmer name, English name, and the heard spelling when it differs from the caption (e.g. "ALWAYS selfie booth" when the caption says "Luv selfie booth"). Never a #hashtag or @account. All known names go in `aliases` in places.json. Never shown on the website |
+| `place_name_alt` | Every other name said or written **in this clip only**: Khmer name, English name, and the heard spelling when it differs from the caption (e.g. "ALWAYS selfie booth" when the caption says "Luv selfie booth"). Never a #hashtag or @account. All known names go in `aliases` in the place file. Never shown on the website |
 | `category` | One value from the category list (section 9) |
 | `sub_category` | Short free text, e.g. "tea", "Vietnamese" |
 | `price_range` | Only if said or written (caption) for this place, as given, e.g. "$5-10", "10,000 riel" |
